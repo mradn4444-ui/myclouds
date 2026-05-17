@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Plus, Layers, Pencil, Check, X, Camera, Trash2 } from 'lucide-react'
+import { Plus, Layers, Pencil, Check, X, Camera, Trash2, Folder as FolderIcon, ChevronLeft } from 'lucide-react'
 
 export type Category = {
   id: string
@@ -7,24 +7,110 @@ export type Category = {
   avatar?: string
 }
 
+export type Folder = {
+  id: string
+  name: string
+  categoryId: string
+}
+
 type Props = {
   categories: Category[]
+  folders: Folder[]
   activeId: string | null
+  activeFolderId: string | null
   onSelect: (id: string | null) => void
+  onFolderSelect: (id: string | null) => void
   onAdd: () => void
+  onAddFolder: () => void
   onRename: (id: string, name: string) => void
+  onRenameFolder: (id: string, name: string) => void
   onDelete: (id: string) => void
+  onDeleteFolder: (id: string) => void
   onAvatarChange: (id: string, url: string) => void
 }
 
-export default function CategorySidebar({ categories, activeId, onSelect, onAdd, onRename, onDelete, onAvatarChange }: Props) {
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editValue, setEditValue] = useState('')
+function EditableRow({
+  label,
+  onRename,
+  onDelete,
+  active,
+  onClick,
+  icon,
+}: {
+  label: string
+  onRename: (name: string) => void
+  onDelete: () => void
+  active: boolean
+  onClick: () => void
+  icon: React.ReactNode
+}) {
+  const [editing, setEditing] = useState(false)
+  const [val, setVal] = useState(label)
+
+  const commit = () => {
+    if (val.trim()) onRename(val.trim())
+    setEditing(false)
+  }
+
+  return (
+    <div
+      className="sidebar-item group"
+      data-active={active}
+      onClick={() => !editing && onClick()}
+      style={{ cursor: 'pointer' }}
+    >
+      <div className="sidebar-item-icon">{icon}</div>
+      {editing ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, minWidth: 0 }} onClick={e => e.stopPropagation()}>
+          <input
+            autoFocus
+            value={val}
+            onChange={e => setVal(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false) }}
+            style={{
+              flex: 1, minWidth: 0,
+              background: '#141414', border: '1px solid #333',
+              color: '#fff', fontSize: '11px',
+              padding: '2px 6px', outline: 'none',
+            }}
+          />
+          <button onClick={commit} style={{ padding: '2px', color: '#444', background: 'none', border: 'none', cursor: 'pointer' }}><Check style={{ width: '11px', height: '11px' }} /></button>
+          <button onClick={() => setEditing(false)} style={{ padding: '2px', color: '#2e2e2e', background: 'none', border: 'none', cursor: 'pointer' }}><X style={{ width: '11px', height: '11px' }} /></button>
+        </div>
+      ) : (
+        <>
+          <span className="sidebar-item-label" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+          <div className="group-action" style={{ display: 'none', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
+            <button
+              onClick={e => { e.stopPropagation(); setVal(label); setEditing(true) }}
+              style={{ padding: '2px', color: '#2a2a2a', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.1s' }}
+              onMouseOver={e => { e.currentTarget.style.color = '#777' }}
+              onMouseOut={e => { e.currentTarget.style.color = '#2a2a2a' }}
+            >
+              <Pencil style={{ width: '10px', height: '10px' }} />
+            </button>
+            <button
+              onClick={e => { e.stopPropagation(); onDelete() }}
+              style={{ padding: '2px', color: '#2a2a2a', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.1s' }}
+              onMouseOver={e => { e.currentTarget.style.color = '#777' }}
+              onMouseOut={e => { e.currentTarget.style.color = '#2a2a2a' }}
+            >
+              <Trash2 style={{ width: '10px', height: '10px' }} />
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+export default function CategorySidebar({
+  categories, folders, activeId, activeFolderId,
+  onSelect, onFolderSelect, onAdd, onAddFolder,
+  onRename, onRenameFolder, onDelete, onDeleteFolder, onAvatarChange,
+}: Props) {
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const avatarTargetId = useRef<string | null>(null)
-
-  const startEdit = (cat: Category) => { setEditingId(cat.id); setEditValue(cat.name) }
-  const commitEdit = () => { if (editingId && editValue.trim()) onRename(editingId, editValue.trim()); setEditingId(null) }
 
   const handleAvatarClick = (id: string) => { avatarTargetId.current = id; avatarInputRef.current?.click() }
   const handleAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -34,101 +120,141 @@ export default function CategorySidebar({ categories, activeId, onSelect, onAdd,
     e.target.value = ''
   }
 
+  const activeFolders = activeId ? folders.filter(f => f.categoryId === activeId) : []
+  const activeCategory = categories.find(c => c.id === activeId)
+
   return (
-    <aside className="shrink-0 flex flex-col overflow-hidden" style={{ width: '192px', background: '#080808', borderRight: '1px solid #141414' }}>
-      <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: '1px solid #141414' }}>
-        <span style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.18em', color: '#333', fontFamily: 'ui-monospace, monospace' }}>
+    <aside style={{
+      width: '192px', flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      background: '#070707', borderRight: '1px solid #111',
+    }}>
+      <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarFile} />
+
+      {/* ESPACES header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '14px 12px 10px',
+        borderBottom: '1px solid #111',
+      }}>
+        <span style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.18em', color: '#2a2a2a', fontFamily: 'ui-monospace, monospace' }}>
           ESPACES
         </span>
         <button
           onClick={onAdd}
-          style={{ width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #1e1e1e', color: '#444', transition: 'all 0.15s' }}
-          className="hover:border-neutral-600 hover:text-white"
+          style={{
+            width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'none', border: '1px solid #1a1a1a', color: '#333', cursor: 'pointer', transition: 'all 0.15s',
+          }}
+          onMouseOver={e => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#aaa' }}
+          onMouseOut={e => { e.currentTarget.style.borderColor = '#1a1a1a'; e.currentTarget.style.color = '#333' }}
           title="Nouvel espace"
         >
-          <Plus className="w-3 h-3" />
+          <Plus style={{ width: '11px', height: '11px' }} />
         </button>
       </div>
 
-      <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFile} />
-
-      <div className="flex-1 overflow-y-auto py-2">
-        {/* All */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0' }}>
+        {/* ALL */}
         <button
-          onClick={() => onSelect(null)}
-          className="sidebar-item w-full"
+          onClick={() => { onSelect(null); onFolderSelect(null) }}
+          className="sidebar-item"
           data-active={activeId === null}
+          style={{ width: '100%' }}
         >
-          <div className="sidebar-item-icon">
-            <Layers className="w-3 h-3" />
-          </div>
+          <div className="sidebar-item-icon"><Layers style={{ width: '11px', height: '11px' }} /></div>
           <span className="sidebar-item-label">Tout</span>
         </button>
 
-        {categories.length > 0 && (
-          <div className="mx-3 my-2" style={{ height: '1px', background: '#141414' }} />
-        )}
-
-        {categories.map((cat) => (
+        {/* Categories */}
+        {categories.map(cat => (
           <div
             key={cat.id}
             className="sidebar-item group"
             data-active={activeId === cat.id}
-            onClick={() => editingId !== cat.id && onSelect(cat.id)}
+            onClick={() => { onSelect(cat.id); onFolderSelect(null) }}
+            style={{ cursor: 'pointer' }}
           >
             <div
-              className="sidebar-avatar shrink-0"
-              onClick={(e) => { e.stopPropagation(); handleAvatarClick(cat.id) }}
-              title="Changer la photo"
+              className="sidebar-avatar"
+              onClick={e => { e.stopPropagation(); handleAvatarClick(cat.id) }}
+              title="Photo"
             >
-              {cat.avatar ? (
-                <img src={cat.avatar} alt={cat.name} className="w-full h-full object-cover" style={{ filter: 'grayscale(100%)' }} />
-              ) : (
-                <Camera className="w-2.5 h-2.5" style={{ color: '#333' }} />
-              )}
+              {cat.avatar
+                ? <img src={cat.avatar} alt={cat.name} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'grayscale(100%)' }} />
+                : <Camera style={{ width: '10px', height: '10px', color: '#2a2a2a' }} />
+              }
             </div>
-
-            {editingId === cat.id ? (
-              <div className="flex items-center gap-1 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
-                <input
-                  autoFocus
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditingId(null) }}
-                  className="flex-1 min-w-0 text-xs px-1.5 py-0.5 focus:outline-none"
-                  style={{ background: '#141414', border: '1px solid #333', color: '#fff' }}
-                />
-                <button onClick={commitEdit} className="p-0.5" style={{ color: '#555' }}><Check className="w-3 h-3" /></button>
-                <button onClick={() => setEditingId(null)} className="p-0.5" style={{ color: '#333' }}><X className="w-3 h-3" /></button>
-              </div>
-            ) : (
-              <>
-                <span className="sidebar-item-label flex-1 truncate">{cat.name}</span>
-                <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); startEdit(cat) }}
-                    className="p-0.5 transition-colors"
-                    style={{ color: '#333' }}
-                    onMouseOver={e => (e.currentTarget.style.color = '#888')}
-                    onMouseOut={e => (e.currentTarget.style.color = '#333')}
-                  >
-                    <Pencil className="w-2.5 h-2.5" />
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onDelete(cat.id) }}
-                    className="p-0.5 transition-colors"
-                    style={{ color: '#333' }}
-                    onMouseOver={e => (e.currentTarget.style.color = '#888')}
-                    onMouseOut={e => (e.currentTarget.style.color = '#333')}
-                  >
-                    <Trash2 className="w-2.5 h-2.5" />
-                  </button>
-                </div>
-              </>
-            )}
+            <span className="sidebar-item-label" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cat.name}</span>
+            <div className="group-action" style={{ display: 'none', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
+              <button
+                onClick={e => { e.stopPropagation(); onDelete(cat.id) }}
+                style={{ padding: '2px', color: '#2a2a2a', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.1s' }}
+                onMouseOver={e => { e.currentTarget.style.color = '#777' }}
+                onMouseOut={e => { e.currentTarget.style.color = '#2a2a2a' }}
+              >
+                <Trash2 style={{ width: '10px', height: '10px' }} />
+              </button>
+            </div>
           </div>
         ))}
+
+        {/* FOLDERS section — only when a category is active */}
+        {activeId && (
+          <>
+            <div style={{ margin: '10px 12px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.18em', color: '#1e1e1e', fontFamily: 'ui-monospace, monospace' }}>
+                DOSSIERS
+              </span>
+              <button
+                onClick={onAddFolder}
+                style={{
+                  width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'none', border: '1px solid #181818', color: '#282828', cursor: 'pointer', transition: 'all 0.15s',
+                }}
+                onMouseOver={e => { e.currentTarget.style.borderColor = '#2e2e2e'; e.currentTarget.style.color = '#777' }}
+                onMouseOut={e => { e.currentTarget.style.borderColor = '#181818'; e.currentTarget.style.color = '#282828' }}
+                title="Nouveau dossier"
+              >
+                <Plus style={{ width: '10px', height: '10px' }} />
+              </button>
+            </div>
+
+            {/* All files in category (no folder) */}
+            <button
+              onClick={() => onFolderSelect(null)}
+              className="sidebar-item"
+              data-active={activeId !== null && activeFolderId === null}
+              style={{ width: '100%', paddingLeft: '14px' }}
+            >
+              <div className="sidebar-item-icon"><Layers style={{ width: '10px', height: '10px' }} /></div>
+              <span className="sidebar-item-label" style={{ fontSize: '10px' }}>Tous les fichiers</span>
+            </button>
+
+            {activeFolders.map(folder => (
+              <EditableRow
+                key={folder.id}
+                label={folder.name}
+                active={activeFolderId === folder.id}
+                onClick={() => onFolderSelect(folder.id)}
+                onRename={name => onRenameFolder(folder.id, name)}
+                onDelete={() => onDeleteFolder(folder.id)}
+                icon={<FolderIcon style={{ width: '11px', height: '11px' }} />}
+              />
+            ))}
+
+            {activeFolders.length === 0 && (
+              <p style={{ fontSize: '9px', color: '#1c1c1c', padding: '4px 14px 8px', letterSpacing: '0.04em' }}>
+                Aucun dossier
+              </p>
+            )}
+          </>
+        )}
       </div>
+
+      <style>{`
+        .sidebar-item:hover .group-action { display: flex !important; }
+        .group-action { display: none; }
+      `}</style>
     </aside>
   )
 }
