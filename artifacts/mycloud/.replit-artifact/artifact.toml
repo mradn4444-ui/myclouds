@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "MyCloud"
+version = "1.0.0"
+id = "artifacts/mycloud"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22248
+
+[services.development]
+run = "pnpm --filter @workspace/mycloud run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/mycloud", "run", "build" ]
+publicDir = "artifacts/mycloud/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22248"
+BASE_PATH = "/"
