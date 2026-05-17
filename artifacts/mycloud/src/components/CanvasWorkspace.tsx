@@ -228,12 +228,7 @@ export default function CanvasWorkspace() {
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="text-center border border-dashed border-neutral-700 px-12 py-10 max-w-sm">
                 <Upload className="w-8 h-8 mx-auto text-neutral-500 mb-3" />
-                <p className="text-sm text-white font-medium">
-                  {activeCategoryId ? `Espace vide — ${activeCategory?.name}` : 'Dépose tes fichiers ici'}
-                </p>
-                <p className="text-xs text-neutral-500 mt-2">
-                  Glisse-dépose · déplace · redimensionne
-                </p>
+                <p className="text-sm text-white font-medium">Fichier</p>
               </div>
             </div>
           )}
