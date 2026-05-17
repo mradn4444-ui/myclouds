@@ -1,0 +1,26 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "qi3Zck0zirF61IG-kk4yz"
+uri = "file://artifacts/mockup-sandbox/public/images/avatar.jpg"
+type = "image"
+title = "professional portrait headshot, dark background, cinematic lighting"
+
+[[outputs]]
+id = "oT6nn5_vDxevBOXtcupSG"
+uri = "file://artifacts/mockup-sandbox/public/images/photo1.jpg"
+type = "image"
+title = "beautiful atmospheric landscape photography, dark moody mist"
+
+[[outputs]]
+id = "L26_rnpLTmks0vuTiVDuV"
+uri = "file://artifacts/mockup-sandbox/public/images/video-thumb.jpg"
+type = "image"
+title = "neon lit cyberpunk city street at night"
+
+[[outputs]]
+id = "-QCFiyHgXCe53NmJWtmPf"
+uri = "file://artifacts/mockup-sandbox/public/images/reference_ui.jpg"
+type = "image"
+title = "minimalist dark mood abstract workspace background"
