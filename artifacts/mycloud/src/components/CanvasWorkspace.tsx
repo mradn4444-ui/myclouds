@@ -224,14 +224,6 @@ export default function CanvasWorkspace() {
             onChange={(e) => e.target.files && addFiles(e.target.files)}
           />
 
-          {visibleItems.length === 0 && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="text-center border border-dashed border-neutral-700 px-12 py-10 max-w-sm">
-                <Upload className="w-8 h-8 mx-auto text-neutral-500 mb-3" />
-                <p className="text-sm text-white font-medium">Fichier</p>
-              </div>
-            </div>
-          )}
 
           {visibleItems.map((item) => {
             const Icon = item.type === 'note' ? StickyNote : iconForMime(item.mimeType)
