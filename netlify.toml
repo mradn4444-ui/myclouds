@@ -1,0 +1,12 @@
+[build]
+  base = "artifacts/mycloud"
+  command = "PORT=3000 BASE_PATH=/ pnpm build"
+  publish = "dist/public"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
