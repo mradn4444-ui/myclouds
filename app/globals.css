@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #000000;
+  --fg: #ffffff;
+  --muted: #a3a3a3;
+  --border: #262626;
+  --surface: #0a0a0a;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.canvas-grid {
+  background-color: var(--bg);
+  background-image: radial-gradient(circle, #1a1a1a 1px, transparent 1px);
+  background-size: 24px 24px;
+}
