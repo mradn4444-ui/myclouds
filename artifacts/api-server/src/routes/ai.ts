@@ -21,11 +21,18 @@ async function webSearch(query: string): Promise<string> {
 }
 
 router.post("/ai/chat", async (req, res) => {
-  const { messages, categoryName, categoryItems, mode } = req.body as {
+  const { messages, categoryName, categoryItems, mode, profile } = req.body as {
     messages: { role: "user" | "assistant"; content: string }[];
     categoryName?: string;
     categoryItems?: string[];
     mode?: "chat" | "help";
+    profile?: {
+      nom?: string;
+      prenom?: string;
+      pseudo?: string;
+      age?: string;
+      aiStyle?: string;
+    };
   };
 
   if (!messages?.length) {
@@ -43,8 +50,22 @@ router.post("/ai/chat", async (req, res) => {
 
   const contextParts: string[] = [
     "Tu es un assistant personnel intégré dans MyCloud, un espace de travail personnel.",
-    "Tu réponds en français, de façon concise et utile.",
+    "Tu réponds en français.",
   ];
+
+  // User profile context
+  if (profile) {
+    const nameParts: string[] = [];
+    if (profile.prenom) nameParts.push(profile.prenom);
+    if (profile.nom) nameParts.push(profile.nom);
+    if (nameParts.length) contextParts.push(`L'utilisateur s'appelle ${nameParts.join(" ")}.`);
+    if (profile.pseudo) contextParts.push(`Son pseudo est ${profile.pseudo}.`);
+    if (profile.age) contextParts.push(`Il a ${profile.age} ans.`);
+    if (profile.aiStyle?.trim()) {
+      contextParts.push(`\nSTYLE DE COMMUNICATION OBLIGATOIRE :\n${profile.aiStyle.trim()}\nRespecte ce style dans TOUTES tes réponses.`);
+    }
+  }
+
   if (categoryName) {
     contextParts.push(`L'utilisateur est dans la catégorie "${categoryName}".`);
   }
