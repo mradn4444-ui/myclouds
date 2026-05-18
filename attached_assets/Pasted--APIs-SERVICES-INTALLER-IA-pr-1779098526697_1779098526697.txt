@@ -1,0 +1,67 @@
+═══════════════════════════════
+🔌 APIs / SERVICES À INTALLER
+═══════════════════════════════
+
+IA principale :
+-  [oai_citation:0‡platform.openai.com](https://platform.openai.com?utm_source=chatgpt.com)
+(raisonnement IA, résumé, organisation, analyse documents, voix logique, mémoire)
+
+Authentification :
+-  [oai_citation:1‡developers.google.com](https://developers.google.com/identity?utm_source=chatgpt.com)
+-  [oai_citation:2‡docs.github.com](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps?utm_source=chatgpt.com)
+
+Voix :
+- Web Speech API
+(reconnaissance vocale / speech-to-text)
+
+- Speech Synthesis API
+(voix de l’IA / text-to-speech)
+
+Notifications :
+- Push API
+- Service Worker API
+(rappels calendrier, notifications intelligentes)
+
+Fichiers / stockage :
+- IndexedDB API
+(stockage local web)
+
+OU backend cloud :
+- REST API backend maison
+(base de données utilisateur + mémoire + fichiers)
+
+PDF / fichiers :
+- jsPDF
+(création PDF)
+
+OU :
+- PDFKit
+(génération PDF avancée)
+
+Analyse PDF / image :
+- OCR (lecture texte image/PDF scanné)
+Exemple :
+-  [oai_citation:3‡cloud.google.com](https://cloud.google.com/vision?utm_source=chatgpt.com)
+ou
+-  [oai_citation:4‡tesseract-ocr.github.io](https://tesseract-ocr.github.io/?utm_source=chatgpt.com)
+
+YouTube intégré :
+-  [oai_citation:5‡developers.google.com](https://developers.google.com/youtube/v3?utm_source=chatgpt.com)
+-  [oai_citation:6‡developers.google.com](https://developers.google.com/youtube/iframe_api_reference?utm_source=chatgpt.com)
+
+Temps réel (si besoin plus tard) :
+- WebSocket API
+(sync instantanée / actions live)
+
+App PC (choisir UNE seule techno) :
+-  [oai_citation:7‡electronjs.org](https://www.electronjs.org/?utm_source=chatgpt.com)
+OU
+-  [oai_citation:8‡tauri.app](https://tauri.app/?utm_source=chatgpt.com)
+(recommandé si tu veux une app légère)
+
+Fichiers système PC (plus tard) :
+- File System Access API
+(accès fichiers local limité)
+
+Calendrier / rappels (optionnel plus tard) :
+-  [oai_citation:9‡developers.google.com](https://developers.google.com/calendar?utm_source=chatgpt.com)
