@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Search, Plus, FileText, Image as ImageIcon, Video, Mic, File, Folder, MoreHorizontal, Home, Clock, Settings, Cloud } from 'lucide-react';
-import { cn } from '../../../../mycloud/src/lib/utils'; // Using utils from main app might be fine, but rule says "self-contained mockup, Do NOT import from the main app". Wait, let me use the local utils if available, or just write my own inline. Let's use local if it exists, or just template literals.
 
 const cx = (...classes: (string | undefined | null | false)[]) => classes.filter(Boolean).join(' ');
 
