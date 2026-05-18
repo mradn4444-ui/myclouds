@@ -47,3 +47,8 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# User data — never commit PII
+artifacts/data/users.json
+artifacts/api-server/data/users.json
+artifacts/api-server/data/

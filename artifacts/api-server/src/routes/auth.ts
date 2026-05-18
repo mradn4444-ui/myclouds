@@ -3,13 +3,21 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import fs from "fs";
 import path from "path";
+import { randomBytes } from "crypto";
 import { fileURLToPath } from "url";
 
 const router = Router();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const USERS_FILE = path.join(__dirname, "../../data/users.json");
-const JWT_SECRET = process.env.JWT_SECRET ?? "mycloud-secret-change-in-prod-2025";
+if (!process.env.JWT_SECRET) {
+  console.warn(
+    "[auth] WARNING: JWT_SECRET env variable is not set. " +
+    "A random ephemeral secret is being used — all tokens will be invalidated on server restart. " +
+    "Set JWT_SECRET in your environment variables for persistent sessions."
+  );
+}
+const JWT_SECRET: string = process.env.JWT_SECRET ?? randomBytes(48).toString("hex");
 const JWT_EXPIRES = "30d";
 
 interface User {
