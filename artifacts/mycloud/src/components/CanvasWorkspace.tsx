@@ -2,28 +2,47 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Rnd } from 'react-rnd'
 import {
   FileText, Image as ImageIcon, Music, Film, File,
-  StickyNote, Trash2, Upload, Sparkles, Settings, Eye,
+  StickyNote, Trash2, Upload, Sparkles, Settings, Eye, Globe, ExternalLink,
 } from 'lucide-react'
 import CategorySidebar, { type Category, type Folder } from './CategorySidebar'
 import AIPanel from './AIPanel'
 import SettingsPanel from './SettingsPanel'
 import FilePreviewModal from './FilePreviewModal'
+import SmartSuggest, { type OrganizeResult } from './SmartSuggest'
+import PdfExport from './PdfExport'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { useAuth } from '../hooks/useAuth'
 
 export type CanvasItem = {
   id: string
-  type: 'file' | 'note'
+  type: 'file' | 'note' | 'browser'
   title: string
   content?: string
   fileUrl?: string
   mimeType?: string
+  url?: string
   x: number
   y: number
   width: number
   height: number
   categoryId?: string | null
   folderId?: string | null
+}
+
+function toEmbedUrl(raw: string): string {
+  try {
+    const url = new URL(raw.startsWith('http') ? raw : `https://${raw}`)
+    // YouTube
+    const ytMatch = url.hostname.match(/youtube\.com|youtu\.be/)
+    if (ytMatch) {
+      let videoId = url.searchParams.get('v')
+      if (!videoId && url.hostname === 'youtu.be') videoId = url.pathname.slice(1)
+      if (videoId) return `https://www.youtube.com/embed/${videoId}?autoplay=0&rel=0`
+    }
+    return url.toString()
+  } catch {
+    return `https://${raw}`
+  }
 }
 
 const STORAGE_KEY    = 'mycloud-canvas-v1'
@@ -59,7 +78,11 @@ export default function CanvasWorkspace() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [previewItem, setPreviewItem] = useState<CanvasItem | null>(null)
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
+  const [smartFiles, setSmartFiles] = useState<CanvasItem[]>([])
+  const [urlDialogOpen, setUrlDialogOpen] = useState(false)
+  const [urlInput, setUrlInput] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const urlInputRef = useRef<HTMLInputElement>(null)
   const loaded = useRef(false)
   const { profile, updateProfile } = useUserProfile()
   const { logout } = useAuth()
@@ -91,6 +114,21 @@ export default function CanvasWorkspace() {
     return true
   })
 
+  const addBrowserCard = (rawUrl: string) => {
+    if (!rawUrl.trim()) return
+    const embedUrl = toEmbedUrl(rawUrl.trim())
+    const label = rawUrl.includes('youtube') || rawUrl.includes('youtu.be') ? 'YouTube' : rawUrl.replace(/^https?:\/\//, '').split('/')[0]
+    setItems(prev => [...prev, {
+      id: crypto.randomUUID(), type: 'browser', title: label,
+      url: embedUrl,
+      x: 100 + prev.length * 20, y: 80 + prev.length * 14,
+      width: 520, height: 340,
+      categoryId: activeCategoryId, folderId: activeFolderId,
+    }])
+    setUrlInput('')
+    setUrlDialogOpen(false)
+  }
+
   const addNote = () => {
     setItems(prev => [...prev, {
       id: crypto.randomUUID(), type: 'note', title: 'Note', content: '',
@@ -102,13 +140,14 @@ export default function CanvasWorkspace() {
 
   const addFiles = useCallback((files: FileList | File[]) => {
     const list = Array.from(files)
+    const newItems: CanvasItem[] = []
     setItems(prev => {
       const next = [...prev]
       list.forEach((file, i) => {
         const isImage = file.type.startsWith('image/')
         const isPdf   = file.type.includes('pdf')
         const isAudio = file.type.startsWith('audio/')
-        next.push({
+        const item: CanvasItem = {
           id: crypto.randomUUID(), type: 'file', title: file.name,
           fileUrl: URL.createObjectURL(file), mimeType: file.type,
           x: 60 + ((prev.length + i) % 4) * 44,
@@ -116,11 +155,35 @@ export default function CanvasWorkspace() {
           width:  isImage ? 260 : isPdf ? 220 : isAudio ? 260 : 210,
           height: isImage ? 210 : isPdf ? 280 : isAudio ? 100 : 130,
           categoryId: activeCategoryId, folderId: activeFolderId,
-        })
+        }
+        next.push(item)
+        newItems.push(item)
       })
       return next
     })
+    if (list.length >= 2) {
+      setTimeout(() => setSmartFiles(newItems), 300)
+    }
   }, [activeCategoryId, activeFolderId])
+
+  const handleSmartApply = (_action: string, result: OrganizeResult) => {
+    if (result.action === 'folders' && result.folders?.length) {
+      result.folders.forEach((name, i) => {
+        if (!activeCategoryId) return
+        const fId = crypto.randomUUID()
+        setFolders(prev => [...prev, { id: fId, name, categoryId: activeCategoryId }])
+        if (i === 0) setActiveFolderId(fId)
+      })
+    }
+    if (result.action === 'summarize' || result.action === 'organize' || result.action === 'tags') {
+      setItems(prev => [...prev, {
+        id: crypto.randomUUID(), type: 'note', title: '✦ Suggestion IA',
+        content: result.message,
+        x: 80, y: 80, width: 280, height: 200,
+        categoryId: activeCategoryId, folderId: activeFolderId,
+      }])
+    }
+  }
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false)
@@ -225,6 +288,24 @@ export default function CanvasWorkspace() {
             <span>Note</span>
           </button>
 
+          <button
+            type="button"
+            onClick={() => { setUrlDialogOpen(o => !o); setTimeout(() => urlInputRef.current?.focus(), 80) }}
+            className="header-btn"
+            title="Ouvrir un site"
+          >
+            <Globe style={{ width: '12px', height: '12px' }} />
+            <span>Web</span>
+          </button>
+
+          <PdfExport
+            items={items}
+            categories={categories}
+            folders={folders}
+            activeCategory={activeCategory}
+            profile={profile}
+          />
+
           <div style={{ width: '1px', height: '16px', background: '#161616', margin: '0 4px' }} />
 
           <button
@@ -299,7 +380,7 @@ export default function CanvasWorkspace() {
           )}
 
           {visibleItems.map(item => {
-            const Icon = item.type === 'note' ? StickyNote : iconForMime(item.mimeType)
+            const Icon = item.type === 'note' ? StickyNote : item.type === 'browser' ? Globe : iconForMime(item.mimeType)
             const isImage = item.mimeType?.startsWith('image/')
             const isAudio = item.mimeType?.startsWith('audio/')
             const isVideo = item.mimeType?.startsWith('video/')
@@ -377,7 +458,33 @@ export default function CanvasWorkspace() {
                     className="no-drag"
                     style={{ flex: 1, overflow: 'hidden', minHeight: 0, position: 'relative' }}
                   >
-                    {item.type === 'note' ? (
+                    {item.type === 'browser' && item.url ? (
+                      <div style={{ width: '100%', height: '100%', position: 'relative', background: '#070707' }}>
+                        <iframe
+                          src={item.url}
+                          title={item.title}
+                          style={{ width: '100%', height: '100%', border: 'none', display: 'block', filter: 'grayscale(20%)' }}
+                          sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-popups"
+                          referrerPolicy="no-referrer"
+                          allowFullScreen
+                        />
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            position: 'absolute', bottom: 6, right: 6,
+                            background: '#000', border: '1px solid #1c1c1c',
+                            padding: '3px 6px',
+                            display: 'flex', alignItems: 'center', gap: '4px',
+                            textDecoration: 'none',
+                          }}
+                          title="Ouvrir dans un onglet"
+                        >
+                          <ExternalLink style={{ width: 9, height: 9, color: '#555' }} />
+                        </a>
+                      </div>
+                    ) : item.type === 'note' ? (
                       <textarea
                         value={item.content ?? ''}
                         onChange={e => updateItem(item.id, { content: e.target.value })}
@@ -508,12 +615,92 @@ export default function CanvasWorkspace() {
         </div>
       </div>
 
+      {urlDialogOpen && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 200,
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+            paddingTop: '52px',
+            pointerEvents: 'none',
+          }}
+        >
+          <div
+            className="url-dialog"
+            style={{
+              background: '#050505', border: '1px solid #1a1a1a',
+              padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '10px',
+              width: '420px', pointerEvents: 'all',
+              boxShadow: '0 8px 40px rgba(0,0,0,0.9)',
+            }}
+          >
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              fontSize: '9px', letterSpacing: '0.14em', color: '#555',
+              fontFamily: 'ui-monospace, monospace',
+            }}>
+              <Globe style={{ width: 10, height: 10, color: '#444' }} />
+              NAVIGATEUR INTÉGRÉ
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                ref={urlInputRef}
+                type="text"
+                value={urlInput}
+                onChange={e => setUrlInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') addBrowserCard(urlInput)
+                  if (e.key === 'Escape') { setUrlDialogOpen(false); setUrlInput('') }
+                }}
+                placeholder="https://... ou youtube.com/watch?v=..."
+                style={{
+                  flex: 1, background: '#0a0a0a', border: '1px solid #1a1a1a',
+                  color: '#ccc', fontSize: '11px', padding: '7px 10px',
+                  outline: 'none', fontFamily: 'ui-monospace, monospace',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => addBrowserCard(urlInput)}
+                style={{
+                  background: '#fff', color: '#000', border: 'none',
+                  padding: '7px 14px', fontSize: '10px', fontWeight: 600,
+                  letterSpacing: '0.08em', cursor: 'pointer',
+                  fontFamily: 'ui-monospace, monospace',
+                }}
+              >
+                OUVRIR
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {['youtube.com', 'wikipedia.org', 'github.com', 'excalidraw.com'].map(site => (
+                <button
+                  key={site}
+                  type="button"
+                  onClick={() => { setUrlInput(`https://${site}`); urlInputRef.current?.focus() }}
+                  style={{
+                    background: 'none', border: '1px solid #1a1a1a',
+                    color: '#444', fontSize: '9px', padding: '3px 8px',
+                    cursor: 'pointer', fontFamily: 'ui-monospace, monospace',
+                    letterSpacing: '0.06em',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#888' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#1a1a1a'; e.currentTarget.style.color = '#444' }}
+                >
+                  {site}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <AIPanel
         open={aiOpen}
         onClose={() => setAiOpen(false)}
         activeCategory={activeCategory}
         items={items}
         profile={profile}
+        onOpenUrl={addBrowserCard}
       />
       <SettingsPanel
         open={settingsOpen}
@@ -525,6 +712,16 @@ export default function CanvasWorkspace() {
         item={previewItem}
         onClose={() => setPreviewItem(null)}
       />
+
+      {smartFiles.length >= 2 && (
+        <SmartSuggest
+          newFiles={smartFiles}
+          allItems={items}
+          categories={categories}
+          onDismiss={() => setSmartFiles([])}
+          onApply={(action, result) => { handleSmartApply(action, result); setSmartFiles([]) }}
+        />
+      )}
     </div>
   )
 }

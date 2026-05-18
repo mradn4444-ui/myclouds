@@ -665,3 +665,43 @@ html, body {
   color: #fff;
   text-decoration-color: rgba(255,255,255,0.6);
 }
+
+/* ── Voice mode ── */
+@keyframes mic-ring {
+  0%   { opacity: 0.8; transform: scale(1); }
+  100% { opacity: 0;   transform: scale(1.6); }
+}
+
+@keyframes ai-pulse {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.7); }
+}
+
+@keyframes voice-bar {
+  0%, 100% { transform: scaleY(0.3); }
+  50%       { transform: scaleY(1); }
+}
+
+.voice-bars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 14px;
+}
+
+.voice-bar {
+  width: 2px;
+  height: 14px;
+  background: #fff;
+  animation: voice-bar 0.6s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.ai-dot {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #555;
+  animation: ai-pulse 1s ease-in-out infinite;
+}
