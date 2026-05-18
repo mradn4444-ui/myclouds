@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Rnd } from 'react-rnd'
 import {
   FileText, Image as ImageIcon, Music, Film, File,
-  StickyNote, Trash2, Upload, Sparkles, Settings,
+  StickyNote, Trash2, Upload, Sparkles, Settings, Eye,
 } from 'lucide-react'
 import CategorySidebar, { type Category, type Folder } from './CategorySidebar'
 import AIPanel from './AIPanel'
 import SettingsPanel from './SettingsPanel'
+import FilePreviewModal from './FilePreviewModal'
 import { useUserProfile } from '../hooks/useUserProfile'
+import { useAuth } from '../hooks/useAuth'
 
 export type CanvasItem = {
   id: string
@@ -24,7 +26,7 @@ export type CanvasItem = {
   folderId?: string | null
 }
 
-const STORAGE_KEY   = 'mycloud-canvas-v1'
+const STORAGE_KEY    = 'mycloud-canvas-v1'
 const CATEGORIES_KEY = 'mycloud-categories-v1'
 const FOLDERS_KEY    = 'mycloud-folders-v1'
 
@@ -37,6 +39,15 @@ function iconForMime(mime?: string) {
   return File
 }
 
+function typeBadge(mime?: string): string {
+  if (!mime) return 'FICHIER'
+  if (mime.startsWith('image/')) return mime.split('/')[1]?.toUpperCase().slice(0, 4) ?? 'IMG'
+  if (mime.startsWith('audio/')) return mime.split('/')[1]?.toUpperCase().slice(0, 4) ?? 'SON'
+  if (mime.startsWith('video/')) return mime.split('/')[1]?.toUpperCase().slice(0, 4) ?? 'VID'
+  if (mime.includes('pdf')) return 'PDF'
+  return mime.split('/').pop()?.toUpperCase().slice(0, 4) ?? 'FILE'
+}
+
 export default function CanvasWorkspace() {
   const [items, setItems]             = useState<CanvasItem[]>([])
   const [categories, setCategories]   = useState<Category[]>([])
@@ -46,9 +57,12 @@ export default function CanvasWorkspace() {
   const [dragOver, setDragOver]       = useState(false)
   const [aiOpen, setAiOpen]           = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [previewItem, setPreviewItem] = useState<CanvasItem | null>(null)
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const loaded = useRef(false)
   const { profile, updateProfile } = useUserProfile()
+  const { logout } = useAuth()
 
   useEffect(() => {
     try {
@@ -91,13 +105,16 @@ export default function CanvasWorkspace() {
     setItems(prev => {
       const next = [...prev]
       list.forEach((file, i) => {
+        const isImage = file.type.startsWith('image/')
+        const isPdf   = file.type.includes('pdf')
+        const isAudio = file.type.startsWith('audio/')
         next.push({
           id: crypto.randomUUID(), type: 'file', title: file.name,
           fileUrl: URL.createObjectURL(file), mimeType: file.type,
           x: 60 + ((prev.length + i) % 4) * 44,
           y: 60 + ((prev.length + i) % 3) * 54,
-          width: file.type.startsWith('image/') ? 260 : 210,
-          height: file.type.startsWith('image/') ? 210 : 130,
+          width:  isImage ? 260 : isPdf ? 220 : isAudio ? 260 : 210,
+          height: isImage ? 210 : isPdf ? 280 : isAudio ? 100 : 130,
           categoryId: activeCategoryId, folderId: activeFolderId,
         })
       })
@@ -182,9 +199,20 @@ export default function CanvasWorkspace() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {displayName && (
-            <span style={{ fontSize: '10px', color: '#2e2e2e', letterSpacing: '0.06em', marginRight: '8px', fontFamily: 'ui-monospace, monospace' }}>
+            <button
+              type="button"
+              onClick={logout}
+              title="Se déconnecter"
+              style={{
+                fontSize: '10px', color: '#2e2e2e', letterSpacing: '0.06em', marginRight: '8px',
+                fontFamily: 'ui-monospace, monospace', background: 'none', border: 'none',
+                cursor: 'pointer', padding: 0,
+              }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#666')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#2e2e2e')}
+            >
               {displayName.toUpperCase()}
-            </span>
+            </button>
           )}
 
           <button type="button" onClick={() => fileInputRef.current?.click()} className="header-btn-primary">
@@ -247,52 +275,230 @@ export default function CanvasWorkspace() {
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
         >
-          <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={e => e.target.files && addFiles(e.target.files)} />
+          <input
+            ref={fileInputRef} type="file" multiple style={{ display: 'none' }}
+            onChange={e => e.target.files && addFiles(e.target.files)}
+          />
+
+          {visibleItems.length === 0 && (
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: '12px', pointerEvents: 'none',
+            }}>
+              <div style={{
+                width: 48, height: 48, border: '1px dashed #1a1a1a',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Upload style={{ width: 16, height: 16, color: '#222' }} />
+              </div>
+              <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: '10px', color: '#222', letterSpacing: '0.1em' }}>
+                DÉPOSE DES FICHIERS ICI
+              </span>
+            </div>
+          )}
 
           {visibleItems.map(item => {
             const Icon = item.type === 'note' ? StickyNote : iconForMime(item.mimeType)
+            const isImage = item.mimeType?.startsWith('image/')
+            const isAudio = item.mimeType?.startsWith('audio/')
+            const isVideo = item.mimeType?.startsWith('video/')
+            const isPdf   = item.mimeType?.includes('pdf')
+            const isHovered = hoveredCard === item.id
+
             return (
               <Rnd
                 key={item.id}
                 size={{ width: item.width, height: item.height }}
                 position={{ x: item.x, y: item.y }}
-                minWidth={150} minHeight={100}
+                minWidth={150} minHeight={item.type === 'note' ? 100 : 80}
                 bounds="parent"
+                cancel=".no-drag"
                 onDragStop={(_e, d) => updateItem(item.id, { x: d.x, y: d.y })}
                 onResizeStop={(_e, _dir, ref, _delta, pos) =>
                   updateItem(item.id, { width: ref.offsetWidth, height: ref.offsetHeight, x: pos.x, y: pos.y })
                 }
-                style={{ zIndex: 10 }}
+                style={{ zIndex: isHovered ? 20 : 10 }}
               >
-                <div className="canvas-card" style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}>
-                  <div className="canvas-card-header" style={{ cursor: 'move' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                <div
+                  className="canvas-card"
+                  style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}
+                  onMouseEnter={() => setHoveredCard(item.id)}
+                  onMouseLeave={() => setHoveredCard(null)}
+                >
+                  {/* Card header */}
+                  <div className="canvas-card-header" style={{ cursor: 'move', gap: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
                       <Icon style={{ width: '11px', height: '11px', flexShrink: 0, color: '#444' }} />
-                      <span style={{ fontSize: '11px', color: '#888', fontWeight: 500, letterSpacing: '0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{
+                        fontSize: '10px', color: '#666', fontWeight: 500,
+                        letterSpacing: '0.02em',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
                         {item.title}
                       </span>
                     </div>
-                    <button type="button" onClick={() => removeItem(item.id)} className="canvas-card-delete" aria-label="Supprimer">
-                      <Trash2 style={{ width: '11px', height: '11px' }} />
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                      {item.type === 'file' && item.mimeType && (
+                        <span style={{
+                          fontSize: '8px', color: '#2a2a2a',
+                          border: '1px solid #1c1c1c',
+                          padding: '1px 5px',
+                          fontFamily: 'ui-monospace, monospace',
+                          letterSpacing: '0.06em',
+                        }}>
+                          {typeBadge(item.mimeType)}
+                        </span>
+                      )}
+                      {item.type === 'file' && (
+                        <button
+                          type="button"
+                          className="no-drag canvas-card-delete"
+                          onClick={() => setPreviewItem(item)}
+                          title="Aperçu"
+                          style={{ color: isHovered ? '#555' : '#222' }}
+                        >
+                          <Eye style={{ width: '10px', height: '10px' }} />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="no-drag canvas-card-delete"
+                        onClick={() => removeItem(item.id)}
+                        aria-label="Supprimer"
+                      >
+                        <Trash2 style={{ width: '11px', height: '11px' }} />
+                      </button>
+                    </div>
                   </div>
 
-                  <div style={{ flex: 1, padding: '8px', overflow: 'hidden', minHeight: 0 }}>
+                  {/* Card body */}
+                  <div
+                    className="no-drag"
+                    style={{ flex: 1, overflow: 'hidden', minHeight: 0, position: 'relative' }}
+                  >
                     {item.type === 'note' ? (
                       <textarea
                         value={item.content ?? ''}
                         onChange={e => updateItem(item.id, { content: e.target.value })}
                         placeholder="Écris ici…"
-                        style={{ width: '100%', height: '100%', background: 'transparent', color: '#666', fontSize: '11px', resize: 'none', outline: 'none', caretColor: '#fff', lineHeight: '1.65', border: 'none' }}
+                        style={{
+                          width: '100%', height: '100%',
+                          background: 'transparent', color: '#666',
+                          fontSize: '11px', resize: 'none', outline: 'none',
+                          caretColor: '#fff', lineHeight: '1.65', border: 'none',
+                          padding: '8px',
+                          boxSizing: 'border-box',
+                        }}
                       />
-                    ) : item.mimeType?.startsWith('image/') && item.fileUrl ? (
-                      <img src={item.fileUrl} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'grayscale(100%) contrast(1.05)' }} />
-                    ) : item.mimeType?.startsWith('audio/') && item.fileUrl ? (
-                      <audio controls src={item.fileUrl} style={{ width: '100%', marginTop: '8px', filter: 'invert(1)' }} />
-                    ) : item.mimeType?.startsWith('video/') && item.fileUrl ? (
-                      <video src={item.fileUrl} controls style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'grayscale(100%)' }} />
+                    ) : isImage && item.fileUrl ? (
+                      <div
+                        style={{ width: '100%', height: '100%', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
+                        onClick={() => setPreviewItem(item)}
+                      >
+                        <img
+                          src={item.fileUrl}
+                          alt={item.title}
+                          style={{
+                            width: '100%', height: '100%',
+                            objectFit: 'cover',
+                            filter: 'grayscale(100%) contrast(1.05)',
+                            transition: 'transform 0.3s ease',
+                            transform: isHovered ? 'scale(1.03)' : 'scale(1)',
+                          }}
+                        />
+                        {isHovered && (
+                          <div style={{
+                            position: 'absolute', inset: 0,
+                            background: 'rgba(0,0,0,0.4)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>
+                            <Eye style={{ width: 20, height: 20, color: '#fff' }} />
+                          </div>
+                        )}
+                      </div>
+                    ) : isAudio && item.fileUrl ? (
+                      <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', justifyContent: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Music style={{ width: 14, height: 14, color: '#333' }} />
+                          <span style={{ fontSize: '9px', color: '#333', fontFamily: 'ui-monospace, monospace' }}>AUDIO</span>
+                        </div>
+                        <audio
+                          controls
+                          src={item.fileUrl}
+                          style={{ width: '100%', height: '28px', filter: 'invert(1) hue-rotate(180deg)', opacity: 0.7 }}
+                        />
+                      </div>
+                    ) : isVideo && item.fileUrl ? (
+                      <div
+                        style={{ width: '100%', height: '100%', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
+                        onClick={() => setPreviewItem(item)}
+                      >
+                        <video
+                          src={item.fileUrl}
+                          style={{
+                            width: '100%', height: '100%',
+                            objectFit: 'cover',
+                            filter: 'grayscale(100%)',
+                            pointerEvents: 'none',
+                          }}
+                        />
+                        {isHovered && (
+                          <div style={{
+                            position: 'absolute', inset: 0,
+                            background: 'rgba(0,0,0,0.5)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>
+                            <Film style={{ width: 20, height: 20, color: '#fff' }} />
+                          </div>
+                        )}
+                      </div>
+                    ) : isPdf && item.fileUrl ? (
+                      <div
+                        style={{
+                          width: '100%', height: '100%', cursor: 'pointer', position: 'relative',
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                          gap: '8px',
+                        }}
+                        onClick={() => setPreviewItem(item)}
+                      >
+                        <div style={{
+                          width: 36, height: 44,
+                          border: '1px solid #1c1c1c',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          position: 'relative',
+                        }}>
+                          <div style={{
+                            position: 'absolute', top: 0, right: 0,
+                            width: 0, height: 0,
+                            borderLeft: '8px solid #111',
+                            borderBottom: '8px solid #1c1c1c',
+                          }} />
+                          <FileText style={{ width: 14, height: 14, color: '#333', marginTop: '4px' }} />
+                        </div>
+                        <span style={{ fontSize: '9px', color: '#333', fontFamily: 'ui-monospace, monospace', letterSpacing: '0.1em' }}>
+                          OUVRIR PDF
+                        </span>
+                        {isHovered && (
+                          <div style={{
+                            position: 'absolute', inset: 0,
+                            background: 'rgba(255,255,255,0.02)',
+                          }} />
+                        )}
+                      </div>
                     ) : (
-                      <p style={{ fontSize: '10px', color: '#333' }}>{item.mimeType || 'fichier'}</p>
+                      <div style={{
+                        width: '100%', height: '100%',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        gap: '6px', cursor: 'pointer',
+                      }}
+                        onClick={() => item.fileUrl && setPreviewItem(item)}
+                      >
+                        <Icon style={{ width: 20, height: 20, color: '#2a2a2a' }} />
+                        <span style={{ fontSize: '9px', color: '#2a2a2a', fontFamily: 'ui-monospace, monospace', letterSpacing: '0.08em' }}>
+                          {typeBadge(item.mimeType)}
+                        </span>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -302,8 +508,23 @@ export default function CanvasWorkspace() {
         </div>
       </div>
 
-      <AIPanel open={aiOpen} onClose={() => setAiOpen(false)} activeCategory={activeCategory} items={items} profile={profile} />
-      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} profile={profile} onSave={updateProfile} />
+      <AIPanel
+        open={aiOpen}
+        onClose={() => setAiOpen(false)}
+        activeCategory={activeCategory}
+        items={items}
+        profile={profile}
+      />
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        profile={profile}
+        onSave={updateProfile}
+      />
+      <FilePreviewModal
+        item={previewItem}
+        onClose={() => setPreviewItem(null)}
+      />
     </div>
   )
 }
