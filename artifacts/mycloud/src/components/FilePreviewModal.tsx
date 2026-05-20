@@ -50,6 +50,7 @@ export default function FilePreviewModal({ item, onClose }: Props) {
 
   return (
     <div
+      className="modal-backdrop preview-backdrop"
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 9999,
@@ -59,6 +60,7 @@ export default function FilePreviewModal({ item, onClose }: Props) {
       }}
     >
       <div
+        className="preview-shell modal-shell"
         onClick={e => e.stopPropagation()}
         style={{
           position: 'relative',

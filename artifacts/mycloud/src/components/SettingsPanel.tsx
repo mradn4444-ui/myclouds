@@ -118,6 +118,7 @@ export default function SettingsPanel({ open, onClose, profile, onSave }: Props)
 
   return (
     <div
+      className="modal-backdrop settings-backdrop"
       style={{
         position: 'fixed', inset: 0, zIndex: 100,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -127,6 +128,7 @@ export default function SettingsPanel({ open, onClose, profile, onSave }: Props)
       onClick={onClose}
     >
       <div
+        className="settings-shell modal-shell"
         onClick={e => e.stopPropagation()}
         style={{
           width: '540px',
@@ -233,7 +235,7 @@ export default function SettingsPanel({ open, onClose, profile, onSave }: Props)
                   <input ref={avatarRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarFile} />
                 </div>
                 <div>
-                  <p style={{ fontSize: '18px', fontWeight: 300, color: '#ccc', letterSpacing: '-0.01em', lineHeight: 1.2 }}>
+                  <p style={{ fontSize: '18px', fontWeight: 300, color: '#ccc', letterSpacing: '0em', lineHeight: 1.2 }}>
                     {displayName}
                   </p>
                   {local.pseudo && (
@@ -257,7 +259,7 @@ export default function SettingsPanel({ open, onClose, profile, onSave }: Props)
           {tab === 'assistant' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
               <div>
-                <p style={{ fontSize: '18px', fontWeight: 300, color: '#ccc', letterSpacing: '-0.01em', marginBottom: '8px' }}>
+                <p style={{ fontSize: '18px', fontWeight: 300, color: '#ccc', letterSpacing: '0em', marginBottom: '8px' }}>
                   Style de l'assistant
                 </p>
                 <p style={{ fontSize: '12px', color: '#2e2e2e', lineHeight: 1.7, letterSpacing: '0.02em' }}>

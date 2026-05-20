@@ -1,22 +1,30 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation, useSearch } from 'wouter'
 import { useAuth } from '@/hooks/useAuth'
+import { getApiUrl } from '@/lib/api'
 
 export default function AuthPage() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [focusedField, setFocusedField] = useState<string | null>(null)
-  const { login, user } = useAuth()
+  const { login, acceptToken, user } = useAuth()
   const [, navigate] = useLocation()
   const search = useSearch()
 
   useEffect(() => {
-    if (user) { navigate('/'); return; }
     const params = new URLSearchParams(search)
+    const token = params.get('token')
+    if (token) {
+      acceptToken(token)
+        .then(() => navigate('/'))
+        .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Session OAuth invalide'))
+      return
+    }
+    if (user) { navigate('/'); return; }
     const msg = params.get('message')
     if (msg) setMessage(decodeURIComponent(msg))
-  }, [search, user, navigate])
+  }, [search, user, navigate, acceptToken])
 
   const handleEmailSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -83,6 +91,11 @@ export default function AuthPage() {
               {loading ? <span className="auth-spinner" /> : 'Se connecter'}
             </button>
           </form>
+
+          <div className="auth-oauth-row">
+            <a className="auth-oauth-btn" href={getApiUrl('/auth/oauth/google')}>Google</a>
+            <a className="auth-oauth-btn" href={getApiUrl('/auth/oauth/github')}>GitHub</a>
+          </div>
 
           <div className="auth-footer">
             Pas encore de compte ?{' '}

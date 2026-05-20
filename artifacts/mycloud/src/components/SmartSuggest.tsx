@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Sparkles, X, FolderPlus, FileText, List, LayoutGrid, Loader2 } from 'lucide-react'
 import type { CanvasItem } from './CanvasWorkspace'
 import type { Category, Folder } from './CategorySidebar'
+import { useAuth } from '../hooks/useAuth'
+import { getApiUrl, parseJsonResponse } from '../lib/api'
 
 interface Props {
   newFiles: CanvasItem[]
@@ -21,8 +23,6 @@ export interface OrganizeResult {
   message: string
 }
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
-
 const ACTIONS = [
   { id: 'organize' as const, icon: LayoutGrid, label: 'Organiser', desc: 'Trier par type' },
   { id: 'summarize' as const, icon: FileText,   label: 'Résumer',   desc: 'Résumé rapide' },
@@ -31,6 +31,7 @@ const ACTIONS = [
 ]
 
 export default function SmartSuggest({ newFiles, allItems, categories, onDismiss, onApply }: Props) {
+  const { token } = useAuth()
   const [visible, setVisible] = useState(false)
   const [loading, setLoading] = useState(false)
   const [activeAction, setActiveAction] = useState<OrganizeAction | null>(null)
@@ -59,15 +60,21 @@ export default function SmartSuggest({ newFiles, allItems, categories, onDismiss
       : `J'ai ajouté ces fichiers: ${fileNames}${existingCats ? ` dans un espace qui contient déjà: ${existingCats}` : ''}. Propose une structure en 2-3 lignes.`
 
     try {
-      const res = await fetch(`${BASE}/api/ai/chat`, {
+      const res = await fetch(getApiUrl('/ai/chat'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           messages: [{ role: 'user', content: prompt }],
           mode: 'help',
         }),
       })
-      const data = await res.json() as { reply: string }
+      const data = await parseJsonResponse<{ reply?: string; error?: string }>(res)
+      if (!res.ok || !data.reply) {
+        throw new Error(data.error ?? 'Erreur IA')
+      }
       const r: OrganizeResult = {
         action,
         message: data.reply,
@@ -96,6 +103,7 @@ export default function SmartSuggest({ newFiles, allItems, categories, onDismiss
 
   return (
     <div
+      className="smart-suggest-shell"
       style={{
         position: 'fixed',
         bottom: '24px',
@@ -107,7 +115,7 @@ export default function SmartSuggest({ newFiles, allItems, categories, onDismiss
         width: 'min(480px, 90vw)',
       }}
     >
-      <div style={{
+      <div className="smart-suggest-card" style={{
         background: '#0c0c0c',
         border: '1px solid #222',
         boxShadow: '0 24px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.04)',

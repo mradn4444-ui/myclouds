@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
@@ -25,10 +25,27 @@ app.use(
     },
   }),
 );
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
+
+app.use("/api", (req, res) => {
+  res.status(404).json({
+    error: "Route API introuvable",
+    path: req.originalUrl,
+  });
+});
+
+app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
+  if (res.headersSent) {
+    next(err);
+    return;
+  }
+
+  logger.error({ err, path: req.originalUrl }, "Unhandled API error");
+  res.status(500).json({ error: "Erreur serveur" });
+});
 
 export default app;

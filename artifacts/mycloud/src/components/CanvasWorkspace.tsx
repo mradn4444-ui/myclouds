@@ -12,22 +12,11 @@ import SmartSuggest, { type OrganizeResult } from './SmartSuggest'
 import PdfExport from './PdfExport'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { useAuth } from '../hooks/useAuth'
+import { useItems, type CanvasItem } from '../hooks/useItems'
+import { useCategories } from '../hooks/useCategories'
+import { useFileUpload } from '../hooks/useFileUpload'
 
-export type CanvasItem = {
-  id: string
-  type: 'file' | 'note' | 'browser'
-  title: string
-  content?: string
-  fileUrl?: string
-  mimeType?: string
-  url?: string
-  x: number
-  y: number
-  width: number
-  height: number
-  categoryId?: string | null
-  folderId?: string | null
-}
+export type { CanvasItem } from '../hooks/useItems'
 
 function toEmbedUrl(raw: string): string {
   try {
@@ -44,10 +33,6 @@ function toEmbedUrl(raw: string): string {
     return `https://${raw}`
   }
 }
-
-const STORAGE_KEY    = 'mycloud-canvas-v1'
-const CATEGORIES_KEY = 'mycloud-categories-v1'
-const FOLDERS_KEY    = 'mycloud-folders-v1'
 
 function iconForMime(mime?: string) {
   if (!mime) return File
@@ -67,14 +52,18 @@ function typeBadge(mime?: string): string {
   return mime.split('/').pop()?.toUpperCase().slice(0, 4) ?? 'FILE'
 }
 
+
 export default function CanvasWorkspace() {
-  const [items, setItems]             = useState<CanvasItem[]>([])
-  const [categories, setCategories]   = useState<Category[]>([])
-  const [folders, setFolders]         = useState<Folder[]>([])
+  // Hooks pour la persistance DB
+  const { items, loading: itemsLoading, error: itemsError, loadItems, createItem, updateItem: updateItemDB, deleteItem: deleteItemDB } = useItems()
+  const { categories, folders, loading: catsLoading, loadCategories, createCategory, updateCategory, deleteCategory, createFolder, deleteFolder } = useCategories()
+  const { upload, uploading: uploadingFile } = useFileUpload()
+
+  // État local
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null)
-  const [activeFolderId, setActiveFolderId]       = useState<string | null>(null)
-  const [dragOver, setDragOver]       = useState(false)
-  const [aiOpen, setAiOpen]           = useState(false)
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null)
+  const [dragOver, setDragOver] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [previewItem, setPreviewItem] = useState<CanvasItem | null>(null)
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
@@ -83,22 +72,14 @@ export default function CanvasWorkspace() {
   const [urlInput, setUrlInput] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const urlInputRef = useRef<HTMLInputElement>(null)
-  const loaded = useRef(false)
   const { profile, updateProfile } = useUserProfile()
   const { logout } = useAuth()
 
+  // Charger les données au montage
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);    if (raw) setItems(JSON.parse(raw))
-      const rawCats = localStorage.getItem(CATEGORIES_KEY); if (rawCats) setCategories(JSON.parse(rawCats))
-      const rawFols = localStorage.getItem(FOLDERS_KEY);    if (rawFols) setFolders(JSON.parse(rawFols))
-    } catch { /* ignore */ }
-    loaded.current = true
-  }, [])
-
-  useEffect(() => { if (loaded.current) localStorage.setItem(STORAGE_KEY, JSON.stringify(items)) }, [items])
-  useEffect(() => { if (loaded.current) localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories)) }, [categories])
-  useEffect(() => { if (loaded.current) localStorage.setItem(FOLDERS_KEY, JSON.stringify(folders)) }, [folders])
+    loadItems()
+    loadCategories()
+  }, [loadItems, loadCategories])
 
   const handleCategorySelect = (id: string | null) => {
     setActiveCategoryId(id)
@@ -114,102 +95,151 @@ export default function CanvasWorkspace() {
     return true
   })
 
-  const addBrowserCard = (rawUrl: string) => {
+  const addBrowserCard = async (rawUrl: string) => {
     if (!rawUrl.trim()) return
     const embedUrl = toEmbedUrl(rawUrl.trim())
     const label = rawUrl.includes('youtube') || rawUrl.includes('youtu.be') ? 'YouTube' : rawUrl.replace(/^https?:\/\//, '').split('/')[0]
-    setItems(prev => [...prev, {
-      id: crypto.randomUUID(), type: 'browser', title: label,
-      url: embedUrl,
-      x: 100 + prev.length * 20, y: 80 + prev.length * 14,
-      width: 520, height: 340,
-      categoryId: activeCategoryId, folderId: activeFolderId,
-    }])
-    setUrlInput('')
-    setUrlDialogOpen(false)
-  }
-
-  const addNote = () => {
-    setItems(prev => [...prev, {
-      id: crypto.randomUUID(), type: 'note', title: 'Note', content: '',
-      x: 80 + prev.length * 24, y: 80 + prev.length * 24,
-      width: 240, height: 180,
-      categoryId: activeCategoryId, folderId: activeFolderId,
-    }])
-  }
-
-  const addFiles = useCallback((files: FileList | File[]) => {
-    const list = Array.from(files)
-    const newItems: CanvasItem[] = []
-    setItems(prev => {
-      const next = [...prev]
-      list.forEach((file, i) => {
-        const isImage = file.type.startsWith('image/')
-        const isPdf   = file.type.includes('pdf')
-        const isAudio = file.type.startsWith('audio/')
-        const item: CanvasItem = {
-          id: crypto.randomUUID(), type: 'file', title: file.name,
-          fileUrl: URL.createObjectURL(file), mimeType: file.type,
-          x: 60 + ((prev.length + i) % 4) * 44,
-          y: 60 + ((prev.length + i) % 3) * 54,
-          width:  isImage ? 260 : isPdf ? 220 : isAudio ? 260 : 210,
-          height: isImage ? 210 : isPdf ? 280 : isAudio ? 100 : 130,
-          categoryId: activeCategoryId, folderId: activeFolderId,
-        }
-        next.push(item)
-        newItems.push(item)
+    try {
+      await createItem({
+        type: 'browser',
+        title: label,
+        url: embedUrl,
+        x: 100 + items.length * 20,
+        y: 80 + items.length * 14,
+        width: 520,
+        height: 340,
+        categoryId: activeCategoryId,
+        folderId: activeFolderId,
       })
-      return next
-    })
-    if (list.length >= 2) {
-      setTimeout(() => setSmartFiles(newItems), 300)
+      setUrlInput('')
+      setUrlDialogOpen(false)
+    } catch (err) {
+      console.error(err)
     }
-  }, [activeCategoryId, activeFolderId])
+  }
 
-  const handleSmartApply = (_action: string, result: OrganizeResult) => {
-    if (result.action === 'folders' && result.folders?.length) {
-      result.folders.forEach((name, i) => {
-        if (!activeCategoryId) return
-        const fId = crypto.randomUUID()
-        setFolders(prev => [...prev, { id: fId, name, categoryId: activeCategoryId }])
-        if (i === 0) setActiveFolderId(fId)
+  const addNote = async () => {
+    try {
+      await createItem({
+        type: 'note',
+        title: 'Note',
+        content: '',
+        x: 80 + items.length * 24,
+        y: 80 + items.length * 24,
+        width: 240,
+        height: 180,
+        categoryId: activeCategoryId,
+        folderId: activeFolderId,
       })
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const addFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const list = Array.from(files)
+      const newItems: CanvasItem[] = []
+
+      for (let i = 0; i < list.length; i++) {
+        const file = list[i];
+        try {
+          const response = await upload(file, activeCategoryId || undefined, activeFolderId || undefined)
+          const isImage = file.type.startsWith('image/')
+          const isPdf = file.type.includes('pdf')
+          const isAudio = file.type.startsWith('audio/')
+
+          // Créer un item avec les dimensions appropriées
+          await createItem({
+            type: 'file',
+            title: file.name,
+            fileUrl: response.downloadUrl,
+            mimeType: file.type,
+            x: 60 + ((items.length + i) % 4) * 44,
+            y: 60 + ((items.length + i) % 3) * 54,
+            width: isImage ? 260 : isPdf ? 220 : isAudio ? 260 : 210,
+            height: isImage ? 210 : isPdf ? 280 : isAudio ? 100 : 130,
+            categoryId: activeCategoryId,
+            folderId: activeFolderId,
+          })
+
+          newItems.push(response.item as CanvasItem)
+        } catch (err) {
+          console.error('Upload failed:', err)
+        }
+      }
+
+      if (list.length >= 2) {
+        setTimeout(() => setSmartFiles(newItems), 300)
+      }
+    },
+    [activeCategoryId, activeFolderId, items.length, createItem, upload]
+  )
+
+  const handleSmartApply = async (_action: string, result: OrganizeResult) => {
+    if (result.action === 'folders' && result.folders?.length) {
+      for (const name of result.folders) {
+        if (!activeCategoryId) return
+        try {
+          await createFolder(activeCategoryId, name)
+        } catch (err) {
+          console.error(err)
+        }
+      }
     }
     if (result.action === 'summarize' || result.action === 'organize' || result.action === 'tags') {
-      setItems(prev => [...prev, {
-        id: crypto.randomUUID(), type: 'note', title: '✦ Suggestion IA',
-        content: result.message,
-        x: 80, y: 80, width: 280, height: 200,
-        categoryId: activeCategoryId, folderId: activeFolderId,
-      }])
+      try {
+        await createItem({
+          type: 'note',
+          title: '✦ Suggestion IA',
+          content: result.message,
+          x: 80,
+          y: 80,
+          width: 280,
+          height: 200,
+          categoryId: activeCategoryId,
+          folderId: activeFolderId,
+        })
+      } catch (err) {
+        console.error(err)
+      }
     }
   }
 
   const onDrop = (e: React.DragEvent) => {
-    e.preventDefault(); setDragOver(false)
+    e.preventDefault()
+    setDragOver(false)
     if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files)
   }
 
-  const updateItem = (id: string, patch: Partial<CanvasItem>) =>
-    setItems(prev => prev.map(it => it.id === id ? { ...it, ...patch } : it))
-
-  const removeItem = (id: string) => setItems(prev => {
-    const item = prev.find(i => i.id === id)
-    if (item?.fileUrl?.startsWith('blob:')) URL.revokeObjectURL(item.fileUrl)
-    return prev.filter(i => i.id !== id)
-  })
-
-  const addCategory = () => {
-    const c: Category = { id: crypto.randomUUID(), name: `Espace ${categories.length + 1}` }
-    setCategories(prev => [...prev, c])
-    handleCategorySelect(c.id)
+  const updateItem = (id: string, patch: Partial<CanvasItem>) => {
+    updateItemDB(id, patch).catch(console.error)
   }
 
-  const addFolder = () => {
+  const removeItem = (id: string) => {
+    deleteItemDB(id).catch(console.error)
+  }
+
+  const addCategory = async () => {
+    try {
+      const c = await createCategory(`Espace ${categories.length + 1}`)
+      handleCategorySelect(c.id)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const addFolder = async () => {
     if (!activeCategoryId) return
-    const f: Folder = { id: crypto.randomUUID(), name: `Dossier ${folders.filter(f => f.categoryId === activeCategoryId).length + 1}`, categoryId: activeCategoryId }
-    setFolders(prev => [...prev, f])
-    setActiveFolderId(f.id)
+    try {
+      const f = await createFolder(
+        activeCategoryId,
+        `Dossier ${folders.filter(f => f.categoryId === activeCategoryId).length + 1}`
+      )
+      setActiveFolderId(f.id)
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   const breadcrumb = [
@@ -220,16 +250,16 @@ export default function CanvasWorkspace() {
   const displayName = profile.pseudo || profile.prenom || null
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#060606', position: 'relative' }}>
+    <div className="mycloud-shell" style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#060606', position: 'relative' }}>
       {/* Dot grid */}
-      <div style={{
+      <div className="ambient-grid" style={{
         position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
         backgroundImage: 'radial-gradient(circle, #181818 1px, transparent 1px)',
         backgroundSize: '30px 30px',
       }} />
 
       {/* Header */}
-      <header style={{
+      <header className="mycloud-header" style={{
         position: 'relative', zIndex: 40, flexShrink: 0,
         height: '52px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '0 20px',
@@ -237,7 +267,7 @@ export default function CanvasWorkspace() {
         backdropFilter: 'blur(16px)',
         borderBottom: '1px solid #111',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="brand-cluster" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: '0.24em', fontSize: '12px', fontWeight: 700, color: '#fff' }}>
             MYCLOUD
           </span>
@@ -260,12 +290,13 @@ export default function CanvasWorkspace() {
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {displayName && (
             <button
               type="button"
               onClick={logout}
               title="Se déconnecter"
+              className="user-pill"
               style={{
                 fontSize: '10px', color: '#2e2e2e', letterSpacing: '0.06em', marginRight: '8px',
                 fontFamily: 'ui-monospace, monospace', background: 'none', border: 'none',
@@ -328,7 +359,7 @@ export default function CanvasWorkspace() {
         </div>
       </header>
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative', zIndex: 10 }}>
+      <div className="workspace-layout" style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative', zIndex: 10 }}>
         <CategorySidebar
           categories={categories}
           folders={folders}
@@ -338,15 +369,16 @@ export default function CanvasWorkspace() {
           onFolderSelect={setActiveFolderId}
           onAdd={addCategory}
           onAddFolder={addFolder}
-          onRename={(id, name) => setCategories(prev => prev.map(c => c.id === id ? { ...c, name } : c))}
-          onRenameFolder={(id, name) => setFolders(prev => prev.map(f => f.id === id ? { ...f, name } : f))}
-          onDelete={(id) => { setCategories(prev => prev.filter(c => c.id !== id)); if (activeCategoryId === id) handleCategorySelect(null) }}
-          onDeleteFolder={(id) => { setFolders(prev => prev.filter(f => f.id !== id)); if (activeFolderId === id) setActiveFolderId(null) }}
-          onAvatarChange={(id, url) => setCategories(prev => prev.map(c => c.id === id ? { ...c, avatar: url } : c))}
+          onRename={(id, name) => updateCategory(id, { name }).catch(console.error)}
+          onRenameFolder={(id, name) => updateCategory(id, { name }).catch(console.error)}
+          onDelete={(id) => { deleteCategory(id).catch(console.error); if (activeCategoryId === id) handleCategorySelect(null) }}
+          onDeleteFolder={(id) => { deleteFolder(id).catch(console.error); if (activeFolderId === id) setActiveFolderId(null) }}
+          onAvatarChange={() => {}} // TODO: implement avatar
         />
 
         {/* Canvas */}
         <div
+          className={`workspace-canvas${dragOver ? ' is-drag-over' : ''}`}
           style={{
             flex: 1, position: 'relative', overflow: 'hidden',
             outline: dragOver ? '2px solid #ffffff15' : 'none',
@@ -362,7 +394,7 @@ export default function CanvasWorkspace() {
           />
 
           {visibleItems.length === 0 && (
-            <div style={{
+            <div className="empty-state" style={{
               position: 'absolute', inset: 0,
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
               gap: '12px', pointerEvents: 'none',
@@ -402,7 +434,7 @@ export default function CanvasWorkspace() {
                 style={{ zIndex: isHovered ? 20 : 10 }}
               >
                 <div
-                  className="canvas-card"
+                  className={`canvas-card canvas-card-${item.type}`}
                   style={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}
                   onMouseEnter={() => setHoveredCard(item.id)}
                   onMouseLeave={() => setHoveredCard(null)}
@@ -455,7 +487,7 @@ export default function CanvasWorkspace() {
 
                   {/* Card body */}
                   <div
-                    className="no-drag"
+                    className="no-drag canvas-card-body"
                     style={{ flex: 1, overflow: 'hidden', minHeight: 0, position: 'relative' }}
                   >
                     {item.type === 'browser' && item.url ? (
@@ -472,6 +504,7 @@ export default function CanvasWorkspace() {
                           href={item.url}
                           target="_blank"
                           rel="noreferrer"
+                          className="inline-open-link"
                           style={{
                             position: 'absolute', bottom: 6, right: 6,
                             background: '#000', border: '1px solid #1c1c1c',
@@ -486,6 +519,7 @@ export default function CanvasWorkspace() {
                       </div>
                     ) : item.type === 'note' ? (
                       <textarea
+                        className="card-note-input"
                         value={item.content ?? ''}
                         onChange={e => updateItem(item.id, { content: e.target.value })}
                         placeholder="Écris ici…"
@@ -515,7 +549,7 @@ export default function CanvasWorkspace() {
                           }}
                         />
                         {isHovered && (
-                          <div style={{
+                          <div className="media-hover-overlay" style={{
                             position: 'absolute', inset: 0,
                             background: 'rgba(0,0,0,0.4)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -551,7 +585,7 @@ export default function CanvasWorkspace() {
                           }}
                         />
                         {isHovered && (
-                          <div style={{
+                          <div className="media-hover-overlay" style={{
                             position: 'absolute', inset: 0,
                             background: 'rgba(0,0,0,0.5)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -594,7 +628,7 @@ export default function CanvasWorkspace() {
                         )}
                       </div>
                     ) : (
-                      <div style={{
+                      <div className="file-placeholder" style={{
                         width: '100%', height: '100%',
                         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                         gap: '6px', cursor: 'pointer',

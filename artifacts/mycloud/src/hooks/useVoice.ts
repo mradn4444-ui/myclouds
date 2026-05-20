@@ -1,5 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+type BrowserSpeechRecognitionResult = {
+  transcript: string
+}
+
+type BrowserSpeechRecognitionEvent = {
+  results: ArrayLike<ArrayLike<BrowserSpeechRecognitionResult>>
+}
+
+type BrowserSpeechRecognition = {
+  lang: string
+  interimResults: boolean
+  maxAlternatives: number
+  continuous: boolean
+  onstart: (() => void) | null
+  onend: (() => void) | null
+  onerror: (() => void) | null
+  onresult: ((event: BrowserSpeechRecognitionEvent) => void) | null
+  start: () => void
+  stop: () => void
+}
+
+type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition
+
+function getSpeechRecognition() {
+  const win = window as unknown as {
+    SpeechRecognition?: BrowserSpeechRecognitionConstructor
+    webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor
+  }
+  return win.SpeechRecognition ?? win.webkitSpeechRecognition
+}
+
 interface UseVoiceOptions {
   onResult: (transcript: string) => void
   onEnd?: () => void
@@ -9,19 +40,15 @@ interface UseVoiceOptions {
 export function useVoice({ onResult, onEnd, lang = 'fr-FR' }: UseVoiceOptions) {
   const [listening, setListening] = useState(false)
   const [supported, setSupported] = useState(false)
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
 
   useEffect(() => {
-    const SpeechRecognition =
-      (window as unknown as { SpeechRecognition?: typeof window.SpeechRecognition }).SpeechRecognition ??
-      (window as unknown as { webkitSpeechRecognition?: typeof window.SpeechRecognition }).webkitSpeechRecognition
+    const SpeechRecognition = getSpeechRecognition()
     setSupported(!!SpeechRecognition)
   }, [])
 
   const start = useCallback(() => {
-    const SpeechRecognition =
-      (window as unknown as { SpeechRecognition?: typeof window.SpeechRecognition }).SpeechRecognition ??
-      (window as unknown as { webkitSpeechRecognition?: typeof window.SpeechRecognition }).webkitSpeechRecognition
+    const SpeechRecognition = getSpeechRecognition()
     if (!SpeechRecognition) return
 
     const rec = new SpeechRecognition()
@@ -33,7 +60,7 @@ export function useVoice({ onResult, onEnd, lang = 'fr-FR' }: UseVoiceOptions) {
     rec.onstart  = () => setListening(true)
     rec.onend    = () => { setListening(false); onEnd?.() }
     rec.onerror  = () => setListening(false)
-    rec.onresult = (e: SpeechRecognitionEvent) => {
+    rec.onresult = (e: BrowserSpeechRecognitionEvent) => {
       const transcript = e.results[0]?.[0]?.transcript ?? ''
       if (transcript.trim()) onResult(transcript.trim())
     }

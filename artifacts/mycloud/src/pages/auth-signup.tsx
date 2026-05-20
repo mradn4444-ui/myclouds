@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'wouter'
 import { useAuth } from '@/hooks/useAuth'
+import { getApiUrl } from '@/lib/api'
 
 export default function SignupPage() {
   const [error, setError] = useState<string | null>(null)
@@ -78,6 +79,11 @@ export default function SignupPage() {
               {loading ? <span className="auth-spinner" /> : 'Créer mon compte'}
             </button>
           </form>
+
+          <div className="auth-oauth-row">
+            <a className="auth-oauth-btn" href={getApiUrl('/auth/oauth/google')}>Google</a>
+            <a className="auth-oauth-btn" href={getApiUrl('/auth/oauth/github')}>GitHub</a>
+          </div>
 
           <div className="auth-footer">
             Déjà un compte ?{' '}

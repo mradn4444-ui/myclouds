@@ -124,14 +124,14 @@ export default function CategorySidebar({
   const activeCategory = categories.find(c => c.id === activeId)
 
   return (
-    <aside style={{
+    <aside className="category-sidebar" style={{
       width: '192px', flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden',
       background: '#070707', borderRight: '1px solid #111',
     }}>
       <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarFile} />
 
       {/* ESPACES header */}
-      <div style={{
+      <div className="sidebar-section-header" style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '14px 12px 10px',
         borderBottom: '1px solid #111',
@@ -153,7 +153,7 @@ export default function CategorySidebar({
         </button>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0' }}>
+      <div className="sidebar-scroll" style={{ flex: 1, overflowY: 'auto', padding: '6px 0' }}>
         {/* ALL */}
         <button
           onClick={() => { onSelect(null); onFolderSelect(null) }}

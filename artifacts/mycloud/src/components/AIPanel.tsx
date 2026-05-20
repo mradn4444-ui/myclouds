@@ -4,6 +4,8 @@ import type { Category } from './CategorySidebar'
 import type { CanvasItem } from './CanvasWorkspace'
 import type { UserProfile } from '../hooks/useUserProfile'
 import { useVoice, speak, stopSpeaking } from '../hooks/useVoice'
+import { useAuth } from '../hooks/useAuth'
+import { getApiUrl, parseJsonResponse } from '../lib/api'
 
 type Message = {
   role: 'user' | 'assistant'
@@ -19,14 +21,86 @@ type Props = {
   onOpenUrl?: (url: string) => void
 }
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
-
 function extractUrls(text: string): string[] {
   const re = /https?:\/\/[^\s"')>]+/g
   return Array.from(new Set(text.match(re) ?? []))
 }
 
+function renderInline(text: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>
+    }
+    return <span key={index}>{part}</span>
+  })
+}
+
+function renderAssistantContent(content: string) {
+  const blocks = content.trim().split(/\n{2,}/).filter(Boolean)
+  if (!blocks.length) return null
+
+  return (
+    <div className="ai-rich-content">
+      {blocks.map((block, blockIndex) => {
+        const lines = block.split('\n').map(line => line.trim()).filter(Boolean)
+        const heading = lines.length === 1 ? lines[0].match(/^#{1,3}\s+(.+)$/) : null
+        const bulletLines = lines.filter(line => /^[-*]\s+/.test(line))
+        const numberedLines = lines.filter(line => /^\d+[.)]\s+/.test(line))
+        const tableLines = lines.filter(line => line.includes('|'))
+
+        if (heading) {
+          return <h4 key={blockIndex}>{renderInline(heading[1])}</h4>
+        }
+
+        if (tableLines.length >= 2 && tableLines.length === lines.length) {
+          const rows = tableLines
+            .filter(line => !/^[-|\s]+$/.test(line))
+            .map(line => line.split('|').map(cell => cell.trim()).filter(Boolean))
+          return (
+            <div className="ai-table-wrap" key={blockIndex}>
+              <table>
+                <tbody>
+                  {rows.map((row, rowIndex) => (
+                    <tr key={rowIndex}>
+                      {row.map((cell, cellIndex) => (
+                        <td key={cellIndex}>{renderInline(cell)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        }
+
+        if (bulletLines.length === lines.length) {
+          return (
+            <ul key={blockIndex}>
+              {bulletLines.map((line, lineIndex) => (
+                <li key={lineIndex}>{renderInline(line.replace(/^[-*]\s+/, ''))}</li>
+              ))}
+            </ul>
+          )
+        }
+
+        if (numberedLines.length === lines.length) {
+          return (
+            <ol key={blockIndex}>
+              {numberedLines.map((line, lineIndex) => (
+                <li key={lineIndex}>{renderInline(line.replace(/^\d+[.)]\s+/, ''))}</li>
+              ))}
+            </ol>
+          )
+        }
+
+        return <p key={blockIndex}>{renderInline(lines.join('\n'))}</p>
+      })}
+    </div>
+  )
+}
+
 export default function AIPanel({ open, onClose, activeCategory, items, profile, onOpenUrl }: Props) {
+  const { token } = useAuth()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -44,9 +118,12 @@ export default function AIPanel({ open, onClose, activeCategory, items, profile,
     setLoading(true)
     setSearchUsed(false)
     try {
-      const res = await fetch(`${BASE}/api/ai/chat`, {
+      const res = await fetch(getApiUrl('/ai/chat'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           messages: newMessages,
           categoryName: activeCategory?.name,
@@ -57,12 +134,16 @@ export default function AIPanel({ open, onClose, activeCategory, items, profile,
           profile,
         }),
       })
-      const data = await res.json() as { reply: string; searchUsed: boolean }
-      setMessages(prev => [...prev, { role: 'assistant', content: data.reply }])
-      setSearchUsed(data.searchUsed)
+      const data = await parseJsonResponse<{ reply?: string; searchUsed?: boolean; error?: string }>(res)
+      const reply = data.reply
+      if (!res.ok || !reply) {
+        throw new Error(data.error ?? 'Erreur IA')
+      }
+      setMessages(prev => [...prev, { role: 'assistant', content: reply }])
+      setSearchUsed(!!data.searchUsed)
       if (voiceEnabled) {
         setSpeaking(true)
-        speak(data.reply)
+        speak(reply)
         const checkDone = setInterval(() => {
           if (!window.speechSynthesis?.speaking) {
             setSpeaking(false)
@@ -127,11 +208,11 @@ export default function AIPanel({ open, onClose, activeCategory, items, profile,
 
   return (
     <div
-      className="fixed right-0 top-0 h-full flex flex-col z-50"
+      className="ai-panel fixed right-0 top-0 h-full flex flex-col z-50"
       style={{ width: '300px', background: '#080808', borderLeft: '1px solid #141414' }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-4 shrink-0" style={{ borderBottom: '1px solid #141414' }}>
+      <div className="ai-panel-header flex items-center justify-between px-4 py-4 shrink-0" style={{ borderBottom: '1px solid #141414' }}>
         <div className="flex items-center gap-2.5">
           <div
             className="w-5 h-5 flex items-center justify-center"
@@ -200,7 +281,7 @@ export default function AIPanel({ open, onClose, activeCategory, items, profile,
 
       {/* Listening indicator */}
       {listening && (
-        <div style={{
+        <div className="voice-listening" style={{
           padding: '8px 16px',
           background: '#0d0d0d',
           borderBottom: '1px solid #141414',
@@ -218,19 +299,20 @@ export default function AIPanel({ open, onClose, activeCategory, items, profile,
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-3 py-4" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div className="ai-thread flex-1 overflow-y-auto px-3 py-4" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {messages.map((msg, i) => (
-          <div key={i} style={{ display: 'flex', gap: '8px', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+          <div key={i} className={`ai-message-row ai-message-row-${msg.role}`} style={{ display: 'flex', gap: '8px', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
             {msg.role === 'assistant' && (
               <div
-                className="w-5 h-5 shrink-0 mt-0.5 flex items-center justify-center"
+                className="ai-avatar w-5 h-5 shrink-0 mt-0.5 flex items-center justify-center"
                 style={{ border: '1px solid #222', flexShrink: 0, alignSelf: 'flex-start', marginTop: '2px' }}
               >
                 <Bot className="w-2.5 h-2.5" style={{ color: '#555' }} />
               </div>
             )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '220px' }}>
+            <div className="ai-message-stack" style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '220px' }}>
               <div
+                className={`ai-bubble ai-bubble-${msg.role}`}
                 style={{
                   padding: '8px 12px',
                   fontSize: '11px',
@@ -242,7 +324,7 @@ export default function AIPanel({ open, onClose, activeCategory, items, profile,
                     : { background: '#111', color: '#bbb', border: '1px solid #1a1a1a' }),
                 }}
               >
-                {msg.content.replace(/\*\*(.*?)\*\*/g, '$1')}
+                {msg.role === 'assistant' ? renderAssistantContent(msg.content) : msg.content}
               </div>
               {msg.role === 'assistant' && onOpenUrl && extractUrls(msg.content).map(url => (
                 <button
@@ -271,11 +353,11 @@ export default function AIPanel({ open, onClose, activeCategory, items, profile,
         ))}
 
         {loading && (
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-start' }}>
-            <div className="w-5 h-5 shrink-0 flex items-center justify-center" style={{ border: '1px solid #222' }}>
+          <div className="ai-message-row ai-message-row-assistant" style={{ display: 'flex', gap: '8px', justifyContent: 'flex-start' }}>
+            <div className="ai-avatar w-5 h-5 shrink-0 flex items-center justify-center" style={{ border: '1px solid #222' }}>
               <Bot className="w-2.5 h-2.5" style={{ color: '#555' }} />
             </div>
-            <div style={{ background: '#111', border: '1px solid #1a1a1a', padding: '8px 12px', display: 'flex', gap: '4px', alignItems: 'center' }}>
+            <div className="ai-bubble ai-loading-bubble" style={{ background: '#111', border: '1px solid #1a1a1a', padding: '8px 12px', display: 'flex', gap: '4px', alignItems: 'center' }}>
               <span className="ai-dot" style={{ animationDelay: '0s' }} />
               <span className="ai-dot" style={{ animationDelay: '0.15s' }} />
               <span className="ai-dot" style={{ animationDelay: '0.3s' }} />
@@ -294,9 +376,10 @@ export default function AIPanel({ open, onClose, activeCategory, items, profile,
       </div>
 
       {/* Input area */}
-      <div className="shrink-0 p-3" style={{ borderTop: '1px solid #141414' }}>
+      <div className="ai-composer shrink-0 p-3" style={{ borderTop: '1px solid #141414' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px' }}>
           <textarea
+            className="ai-textarea"
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import CanvasWorkspace from "@/components/CanvasWorkspace";
+import { FloatingAIButton } from "@/components/FloatingAIButton";
 import AuthPage from "@/pages/auth";
 import SignupPage from "@/pages/auth-signup";
 import NotFound from "@/pages/not-found";
@@ -50,13 +51,24 @@ function Router() {
   );
 }
 
+function AuthenticatedApp() {
+  const { user } = useAuth()
+
+  return (
+    <>
+      <Router />
+      {user && <FloatingAIButton />}
+    </>
+  )
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <AuthProvider>
-            <Router />
+            <AuthenticatedApp />
           </AuthProvider>
         </WouterRouter>
         <Toaster />
