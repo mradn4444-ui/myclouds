@@ -207,21 +207,51 @@ router.post("/chat", authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
-// POST /api/ai/organize - Organiser automatiquement des éléments
+// POST /api/ai/organize - Organiser automatiquement des éléments ou une idée
 router.post("/organize", authMiddleware, async (req: AuthRequest, res) => {
-  const { items, existingCategories } = req.body as {
-    items: { name: string; type: string }[];
+  const { items, existingCategories, idea, title } = req.body as {
+    items?: { name: string; type: string }[];
     existingCategories?: string[];
+    idea?: string;
+    title?: string;
   };
 
-  if (!items?.length) {
-    res.status(400).json({ error: "items requis" });
+  if (!items?.length && !idea) {
+    res.status(400).json({ error: "items ou idea requis" });
     return;
   }
 
-  const prompt = `
+  let prompt = "";
+  
+  if (idea) {
+    // Organizing an idea
+    prompt = `
+Tu es un expert en gestion de projets et organisation.
+Idée: "${idea}"
+
+Crée une structure complète pour cette idée:
+1. Titre du projet
+2. Résumé (2-3 lignes)
+3. Sections principales (4-5 sections)
+4. Tâches prioritaires (5-7 tâches avec priorité)
+5. Dossiers à créer (4-5 noms de dossiers)
+6. Tags pertinents (5-7 tags)
+
+Réponds en JSON pur sans commentaires. Format exact:
+{
+  "title": "...",
+  "summary": "...",
+  "sections": ["section1", "section2", ...],
+  "tasks": [{"title": "task", "priority": "high|medium|low"}, ...],
+  "folders": ["folder1", "folder2", ...],
+  "tags": ["tag1", "tag2", ...]
+}
+`;
+  } else {
+    // Organizing items
+    prompt = `
 Tu es un expert en organisation de contenu.
-Utilisateur a ces fichiers: ${items.map(i => `${i.name} (${i.type})`).join(", ")}
+Fichiers: ${items!.map(i => `${i.name} (${i.type})`).join(", ")}
 ${existingCategories?.length ? `Catégories existantes: ${existingCategories.join(", ")}` : ""}
 
 Propose une organisation intelligente:
@@ -230,8 +260,15 @@ Propose une organisation intelligente:
 3. Tags pertinents
 4. Structure recommandée
 
-Réponds en JSON structuré.
+Réponds en JSON structuré:
+{
+  "groups": [{"name": "...", "items": [...], "folder": "..."}],
+  "folders": ["folder1", "folder2", ...],
+  "tags": ["tag1", "tag2", ...],
+  "structure": "..."
+}
 `;
+  }
 
   try {
     const completion = await groq.chat.completions.create({
@@ -242,10 +279,25 @@ Réponds en JSON structuré.
     });
 
     const reply = completion.choices[0]?.message?.content ?? "";
-    res.json({ suggestion: reply });
+    
+    // Try to parse as JSON
+    try {
+      const jsonMatch = reply.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        res.json({ 
+          structure: parsed,
+          raw: reply 
+        });
+      } else {
+        res.json({ suggestion: reply });
+      }
+    } catch {
+      res.json({ suggestion: reply });
+    }
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Erreur" });
+    res.status(500).json({ error: "Erreur IA" });
   }
 });
 

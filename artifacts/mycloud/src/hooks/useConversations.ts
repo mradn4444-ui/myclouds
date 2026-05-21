@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { useApi } from "./useApi";
 
-interface Conversation {
+export interface Conversation {
   id: string;
   userId: string;
   title: string;
@@ -13,7 +13,7 @@ interface Conversation {
   archivedAt?: number;
 }
 
-interface ConversationMessage {
+export interface ConversationMessage {
   id: string;
   conversationId: string;
   userId: string;

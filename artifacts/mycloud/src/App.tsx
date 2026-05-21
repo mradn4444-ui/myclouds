@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import CanvasWorkspace from "@/components/CanvasWorkspace";
 import { FloatingAIButton } from "@/components/FloatingAIButton";
+import HomePage from "@/pages/home";
 import AuthPage from "@/pages/auth";
 import SignupPage from "@/pages/auth-signup";
 import NotFound from "@/pages/not-found";
@@ -38,13 +39,14 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 function Router() {
   return (
     <Switch>
-      <Route path="/">
+      <Route path="/" component={HomePage} />
+      <Route path="/app">
         {() => <ProtectedRoute component={CanvasWorkspace} />}
       </Route>
       <Route path="/auth" component={AuthPage} />
       <Route path="/auth/signup" component={SignupPage} />
       <Route path="/dashboard">
-        {() => { window.location.replace('/'); return null; }}
+        {() => { window.location.replace('/app'); return null; }}
       </Route>
       <Route component={NotFound} />
     </Switch>

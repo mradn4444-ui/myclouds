@@ -35,7 +35,7 @@ export default function AuthPage() {
     const password = (form.elements.namedItem('password') as HTMLInputElement).value
     try {
       await login(email, password)
-      navigate('/')
+      navigate('/app')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erreur de connexion')
     } finally {

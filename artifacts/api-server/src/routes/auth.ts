@@ -166,6 +166,11 @@ router.post("/login", async (req, res) => {
       return;
     }
 
+    if (user.passwordHash?.startsWith("oauth:")) {
+      res.status(403).json({ error: "Compte OAuth détecté. Utilisez la connexion Google ou GitHub." });
+      return;
+    }
+
     const passwordMatch = await bcrypt.compare(password, user.passwordHash);
     if (!passwordMatch) {
       res.status(401).json({ error: "Email ou mot de passe incorrect" });
@@ -182,17 +187,24 @@ router.post("/login", async (req, res) => {
   }
 });
 
-router.get("/me", (req, res) => {
-  const auth = req.headers.authorization;
-  if (!auth?.startsWith("Bearer ")) {
-    res.status(401).json({ error: "Non authentifié" });
-    return;
-  }
+router.get("/me", authMiddleware, async (req, res) => {
   try {
-    const payload = jwt.verify(auth.slice(7), JWT_SECRET) as { id: string; email: string };
-    res.json({ user: { id: payload.id, email: payload.email } });
-  } catch {
-    res.status(401).json({ error: "Token invalide ou expiré" });
+    const userId = req.userId as string;
+    const user = db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, userId))
+      .get();
+
+    if (!user) {
+      res.status(401).json({ error: "Utilisateur introuvable" });
+      return;
+    }
+
+    res.json({ user: { id: user.id, email: user.email, pseudo: user.pseudo, nom: user.nom, prenom: user.prenom } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Impossible de vérifier la session" });
   }
 });
 

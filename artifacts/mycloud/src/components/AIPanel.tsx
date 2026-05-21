@@ -6,6 +6,7 @@ import type { UserProfile } from '../hooks/useUserProfile'
 import { useVoice, speak, stopSpeaking } from '../hooks/useVoice'
 import { useAuth } from '../hooks/useAuth'
 import { getApiUrl, parseJsonResponse } from '../lib/api'
+import VisualExplanation from './VisualExplanation'
 
 type Message = {
   role: 'user' | 'assistant'
@@ -35,6 +36,15 @@ function renderInline(text: string) {
   })
 }
 
+function isVisualContent(block: string): boolean {
+  const hasBox = /[┌┐└┘─│├┤┬┴┼]|[\[\]]{2,}/.test(block)
+  const hasArrow = /[\-\>←→↑↓]|[\-]{2,}\>|[<\-]{2,}/.test(block)
+  const hasTree = /[├└─]|[\s]{2,}[\|├└]/.test(block)
+  const hasTable = /\|[\s\S]*?\|/.test(block)
+  const hasMultilineFormatting = block.split('\n').length > 3 && (hasBox || hasArrow || hasTree || hasTable)
+  return hasMultilineFormatting
+}
+
 function renderAssistantContent(content: string) {
   const blocks = content.trim().split(/\n{2,}/).filter(Boolean)
   if (!blocks.length) return null
@@ -42,6 +52,17 @@ function renderAssistantContent(content: string) {
   return (
     <div className="ai-rich-content">
       {blocks.map((block, blockIndex) => {
+        // Check if this is visual content
+        if (isVisualContent(block)) {
+          return (
+            <VisualExplanation
+              key={blockIndex}
+              content={block}
+              title="Visual Structure"
+            />
+          )
+        }
+
         const lines = block.split('\n').map(line => line.trim()).filter(Boolean)
         const heading = lines.length === 1 ? lines[0].match(/^#{1,3}\s+(.+)$/) : null
         const bulletLines = lines.filter(line => /^[-*]\s+/.test(line))
@@ -97,6 +118,20 @@ function renderAssistantContent(content: string) {
       })}
     </div>
   )
+
+
+const quickActionPrompts = [
+  { label: 'Organiser mon idée', prompt: 'Organise cette idée comme un projet structuré avec sections, tâches, résumé et checklist.' },
+  { label: 'Générer un document propre', prompt: 'Génère un document organisé, clair, avec sections et points clés.' },
+  { label: 'Créer un visuel simple', prompt: 'Propose un petit schéma ou une explication visuelle pour cette idée.' },
+  { label: 'Faire un résumé actionnable', prompt: 'Résume cette idée et propose une liste de tâches immédiates.' },
+]
+
+function selectChatMode(text: string) {
+  if (/organis|structure|plan|projet|tâche|checklist|document/i.test(text)) return 'organize'
+  if (/visual|schéma|schema|diagramme|graphe/i.test(text)) return 'structure'
+  if (/résum|resume|summary|synthèse|synthese/i.test(text)) return 'help'
+  return 'chat'
 }
 
 export default function AIPanel({ open, onClose, activeCategory, items, profile, onOpenUrl }: Props) {
@@ -130,7 +165,7 @@ export default function AIPanel({ open, onClose, activeCategory, items, profile,
           categoryItems: items
             .filter(it => !activeCategory || it.categoryId === activeCategory.id)
             .map(it => it.title),
-          mode: 'chat',
+          mode: selectChatMode(text),
           profile,
         }),
       })
@@ -377,6 +412,33 @@ export default function AIPanel({ open, onClose, activeCategory, items, profile,
 
       {/* Input area */}
       <div className="ai-composer shrink-0 p-3" style={{ borderTop: '1px solid #141414' }}>
+        <div className="ai-quick-actions" style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '10px' }}>
+          {quickActionPrompts.map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              className="ai-quick-action"
+              onClick={() => sendMessage(action.prompt)}
+              disabled={loading}
+              style={{
+                flex: '1 1 130px',
+                minWidth: '120px',
+                padding: '8px 10px',
+                borderRadius: '14px',
+                border: '1px solid rgba(255,255,255,0.08)',
+                background: 'rgba(255,255,255,0.03)',
+                color: '#ccc',
+                fontSize: '10px',
+                cursor: 'pointer',
+                transition: 'transform 0.22s ease, border-color 0.22s ease, background 0.22s ease',
+                textAlign: 'center',
+              }}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px' }}>
           <textarea
             className="ai-textarea"

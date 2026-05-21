@@ -23,7 +23,7 @@ export default function SignupPage() {
     const password = (form.elements.namedItem('password') as HTMLInputElement).value
     try {
       await register(email, password)
-      navigate('/')
+      navigate('/app')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erreur lors de l'inscription")
     } finally {

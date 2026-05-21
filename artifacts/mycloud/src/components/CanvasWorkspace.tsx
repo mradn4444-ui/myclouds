@@ -3,6 +3,7 @@ import { Rnd } from 'react-rnd'
 import {
   FileText, Image as ImageIcon, Music, Film, File,
   StickyNote, Trash2, Upload, Sparkles, Settings, Eye, Globe, ExternalLink,
+  Lightbulb,
 } from 'lucide-react'
 import CategorySidebar, { type Category, type Folder } from './CategorySidebar'
 import AIPanel from './AIPanel'
@@ -10,6 +11,7 @@ import SettingsPanel from './SettingsPanel'
 import FilePreviewModal from './FilePreviewModal'
 import SmartSuggest, { type OrganizeResult } from './SmartSuggest'
 import PdfExport from './PdfExport'
+import SmartOrganizeModal from './SmartOrganizeModal'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { useAuth } from '../hooks/useAuth'
 import { useItems, type CanvasItem } from '../hooks/useItems'
@@ -70,6 +72,7 @@ export default function CanvasWorkspace() {
   const [smartFiles, setSmartFiles] = useState<CanvasItem[]>([])
   const [urlDialogOpen, setUrlDialogOpen] = useState(false)
   const [urlInput, setUrlInput] = useState('')
+  const [organizeModalOpen, setOrganizeModalOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const urlInputRef = useRef<HTMLInputElement>(null)
   const { profile, updateProfile } = useUserProfile()
@@ -336,6 +339,16 @@ export default function CanvasWorkspace() {
             activeCategory={activeCategory}
             profile={profile}
           />
+
+          <button
+            type="button"
+            onClick={() => setOrganizeModalOpen(true)}
+            className="header-btn"
+            title="Organiser une idée"
+          >
+            <Lightbulb style={{ width: '12px', height: '12px' }} />
+            <span>Organiser</span>
+          </button>
 
           <div style={{ width: '1px', height: '16px', background: '#161616', margin: '0 4px' }} />
 
@@ -756,6 +769,36 @@ export default function CanvasWorkspace() {
           onApply={(action, result) => { handleSmartApply(action, result); setSmartFiles([]) }}
         />
       )}
+
+      <SmartOrganizeModal
+        open={organizeModalOpen}
+        onClose={() => setOrganizeModalOpen(false)}
+        onApply={async (result) => {
+          // Create categories/folders from result
+          for (const folderName of result.actions.createFolders) {
+            const newCat = await createCategory(folderName, '')
+            if (result.structure.tasks.length > 0) {
+              for (const task of result.structure.tasks.slice(0, 2)) {
+                await createItem({
+                  title: task.title,
+                  content: `Priority: ${task.priority}`,
+                  type: 'note',
+                  categoryId: newCat.id,
+                })
+              }
+            }
+          }
+          // Create document
+          if (result.actions.createDocument) {
+            await createItem({
+              title: result.title,
+              content: result.summary,
+              type: 'note',
+              categoryId: activeCategoryId || undefined,
+            })
+          }
+        }}
+      />
     </div>
   )
 }

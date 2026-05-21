@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
-import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+import runtimeErrorOverlay from "@doni/vite-plugin-runtime-error-modal";
 
 const basePath = process.env.BASE_PATH || "/";
 
@@ -15,12 +15,12 @@ export default defineConfig({
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined
       ? [
-          await import("@replit/vite-plugin-cartographer").then((m) =>
+          await import("@doni/vite-plugin-cartographer").then((m) =>
             m.cartographer({
               root: path.resolve(import.meta.dirname, ".."),
             }),
           ),
-          await import("@replit/vite-plugin-dev-banner").then((m) =>
+          await import("@doni/vite-plugin-dev-banner").then((m) =>
             m.devBanner(),
           ),
         ]
@@ -44,7 +44,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       "/api": {
-        target: process.env.API_URL || "http://[::1]:8081",
+        target: process.env.API_URL || "http://localhost:8081",
         changeOrigin: true,
       },
     },
