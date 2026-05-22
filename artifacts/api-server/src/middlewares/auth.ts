@@ -15,14 +15,27 @@ declare global {
   }
 }
 
-export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
+function getToken(req: AuthRequest): string | null {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.slice(7);
+  }
+
+  const queryToken = req.query["access_token"] ?? req.query["token"];
+  if (typeof queryToken === "string" && queryToken.trim()) {
+    return queryToken;
+  }
+
+  return null;
+}
+
+export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
+  const token = getToken(req);
+  if (!token) {
     res.status(401).json({ error: "Token manquant" });
     return;
   }
 
-  const token = authHeader.slice(7);
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as { id: string; email: string };
     req.userId = decoded.id;

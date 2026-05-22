@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from 'react'
 import { X, Download, FileText, Music, Film, File, Image as ImageIcon } from 'lucide-react'
 import type { CanvasItem } from './CanvasWorkspace'
+import { getAuthedAssetUrl } from '../lib/api'
 
 interface Props {
   item: CanvasItem | null
@@ -47,6 +48,7 @@ export default function FilePreviewModal({ item, onClose }: Props) {
   const isAudio = item.mimeType?.startsWith('audio/')
   const isVideo = item.mimeType?.startsWith('video/')
   const isPdf   = item.mimeType?.includes('pdf')
+  const fileUrl = getAuthedAssetUrl(item.fileUrl)
 
   return (
     <div
@@ -104,9 +106,9 @@ export default function FilePreviewModal({ item, onClose }: Props) {
           </div>
 
           <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-            {item.fileUrl && (
+            {fileUrl && (
               <a
-                href={item.fileUrl}
+                href={fileUrl}
                 download={item.title}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '4px',
@@ -139,13 +141,13 @@ export default function FilePreviewModal({ item, onClose }: Props) {
 
         {/* Content */}
         <div style={{ flex: 1, overflow: 'auto', position: 'relative', minHeight: 0 }}>
-          {isImage && item.fileUrl && (
+          {isImage && fileUrl && (
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               padding: '24px', minHeight: '320px',
             }}>
               <img
-                src={item.fileUrl}
+                src={fileUrl}
                 alt={item.title}
                 style={{
                   maxWidth: '100%', maxHeight: '70vh',
@@ -156,7 +158,7 @@ export default function FilePreviewModal({ item, onClose }: Props) {
             </div>
           )}
 
-          {isAudio && item.fileUrl && (
+          {isAudio && fileUrl && (
             <div style={{
               padding: '40px 32px',
               display: 'flex', flexDirection: 'column', gap: '24px',
@@ -176,17 +178,17 @@ export default function FilePreviewModal({ item, onClose }: Props) {
               </div>
               <audio
                 controls
-                src={item.fileUrl}
+                src={fileUrl}
                 autoPlay
                 style={{ width: '100%', filter: 'invert(1) hue-rotate(180deg)', opacity: 0.8 }}
               />
             </div>
           )}
 
-          {isVideo && item.fileUrl && (
+          {isVideo && fileUrl && (
             <div style={{ background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <video
-                src={item.fileUrl}
+                src={fileUrl}
                 controls
                 autoPlay
                 style={{
@@ -197,10 +199,10 @@ export default function FilePreviewModal({ item, onClose }: Props) {
             </div>
           )}
 
-          {isPdf && item.fileUrl && (
+          {isPdf && fileUrl && (
             <div style={{ height: '70vh', position: 'relative' }}>
               <embed
-                src={item.fileUrl}
+                src={fileUrl}
                 type="application/pdf"
                 style={{ width: '100%', height: '100%' }}
               />
@@ -227,9 +229,9 @@ export default function FilePreviewModal({ item, onClose }: Props) {
                   {formatMime(item.mimeType)}
                 </div>
               </div>
-              {item.fileUrl && (
+              {fileUrl && (
                 <a
-                  href={item.fileUrl}
+                  href={fileUrl}
                   download={item.title}
                   style={{
                     padding: '8px 20px',

@@ -89,6 +89,18 @@ export function useCategories() {
     setFolders((prev) => prev.filter((f) => f.id !== id));
   }, [api]);
 
+  const updateFolder = useCallback(
+    async (id: string, updates: Partial<Folder>) => {
+      const folder = await api<Folder>(`/categories/folders/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(updates),
+      });
+      setFolders((prev) => prev.map((f) => (f.id === id ? folder : f)));
+      return folder;
+    },
+    [api]
+  );
+
   return {
     categories,
     folders,
@@ -98,6 +110,7 @@ export function useCategories() {
     updateCategory,
     deleteCategory,
     createFolder,
+    updateFolder,
     deleteFolder,
   };
 }

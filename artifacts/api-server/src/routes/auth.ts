@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { db, usersTable, type User } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { authMiddleware } from "../middlewares/auth";
 
 const router = Router();
 
@@ -81,6 +82,10 @@ function findOrCreateOAuthUser(email: string, provider: OAuthProvider): User {
     pseudo: null,
     age: null,
     aiStyle: null,
+    workspaceBase: null,
+    workspaceAccent: null,
+    workspaceGlow: null,
+    workspaceMotion: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -131,6 +136,10 @@ router.post("/register", async (req, res) => {
       pseudo: null,
       age: null,
       aiStyle: null,
+      workspaceBase: null,
+      workspaceAccent: null,
+      workspaceGlow: null,
+      workspaceMotion: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

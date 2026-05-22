@@ -24,15 +24,41 @@ export function useAI() {
     [api]
   );
 
-  const organize = useCallback(
-    async (items: { name: string; type: string }[], existingCategories?: string[]) => {
+  const generateImage = useCallback(
+    async (prompt: string, options?: { conversationId?: string }) => {
       setLoading(true);
       try {
-        const response = await api<{ suggestion: string }>("/ai/organize", {
+        const response = await api<{
+          title: string;
+          description: string;
+          imageUrl: string;
+          reply: string;
+          conversationId?: string;
+        }>("/ai/image", {
           method: "POST",
-          body: JSON.stringify({ items, existingCategories }),
+          body: JSON.stringify({ prompt, ...options }),
         });
-        return response.suggestion;
+        return response;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [api]
+  );
+
+  const organize = useCallback(
+    async (
+      items: { name: string; type: string }[] = [],
+      existingCategories?: string[],
+      idea?: string,
+    ) => {
+      setLoading(true);
+      try {
+        const response = await api<{ suggestion?: string; structure?: unknown; raw?: string }>("/ai/organize", {
+          method: "POST",
+          body: JSON.stringify({ items, existingCategories, idea }),
+        });
+        return response;
       } finally {
         setLoading(false);
       }
@@ -154,6 +180,7 @@ export function useAI() {
 
   return {
     chat,
+    generateImage,
     organize,
     summarize,
     generateStructure,

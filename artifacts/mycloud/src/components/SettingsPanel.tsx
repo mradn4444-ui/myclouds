@@ -1,14 +1,15 @@
 import { useRef, useState } from 'react'
-import { X, User, Sparkles, Camera, Check } from 'lucide-react'
+import { X, User, Sparkles, Camera, Check, Palette } from 'lucide-react'
 import type { UserProfile } from '../hooks/useUserProfile'
 
-type Tab = 'profil' | 'assistant'
+type Tab = 'profil' | 'assistant' | 'workspace'
 
 type Props = {
   open: boolean
   onClose: () => void
   profile: UserProfile
   onSave: (p: Partial<UserProfile>) => void
+  onPreview?: (p: Partial<UserProfile>) => void
 }
 
 function Initials({ prenom, nom }: { prenom: string; nom: string }) {
@@ -83,7 +84,41 @@ function Field({
   )
 }
 
-export default function SettingsPanel({ open, onClose, profile, onSave }: Props) {
+function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+}) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', border: '1px solid #141414', padding: '10px 12px' }}>
+      <span style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <span style={{ fontSize: '9px', letterSpacing: '0.18em', fontWeight: 600, color: '#3a3a3a', fontFamily: 'ui-monospace, monospace' }}>
+          {label.toUpperCase()}
+        </span>
+        <span style={{ color: '#777', fontSize: '11px', fontFamily: 'ui-monospace, monospace' }}>{value}</span>
+      </span>
+      <input
+        type="color"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        style={{
+          width: 42,
+          height: 34,
+          padding: 0,
+          border: '1px solid #222',
+          background: 'transparent',
+          cursor: 'pointer',
+        }}
+      />
+    </label>
+  )
+}
+
+export default function SettingsPanel({ open, onClose, profile, onSave, onPreview }: Props) {
   const [tab, setTab] = useState<Tab>('profil')
   const [local, setLocal] = useState<UserProfile>(profile)
   const [saved, setSaved] = useState(false)
@@ -94,6 +129,11 @@ export default function SettingsPanel({ open, onClose, profile, onSave }: Props)
 
   const set = (key: keyof UserProfile, val: string) =>
     setLocal(prev => ({ ...prev, [key]: val }))
+
+  const previewSet = (key: keyof UserProfile, val: string) => {
+    set(key, val)
+    onPreview?.({ [key]: val } as Partial<UserProfile>)
+  }
 
   const save = () => {
     onSave({ ...local, ...(avatar ? { avatar } : {}) })
@@ -114,6 +154,7 @@ export default function SettingsPanel({ open, onClose, profile, onSave }: Props)
   const tabs: { id: Tab; label: string; icon: typeof User }[] = [
     { id: 'profil', label: 'Profil', icon: User },
     { id: 'assistant', label: 'Assistant', icon: Sparkles },
+    { id: 'workspace', label: 'Workspace', icon: Palette },
   ]
 
   return (
@@ -327,6 +368,60 @@ export default function SettingsPanel({ open, onClose, profile, onSave }: Props)
                     onMouseOut={e => { e.currentTarget.style.borderColor = '#141414'; e.currentTarget.style.color = '#333' }}
                   >
                     "{ex}"
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {tab === 'workspace' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+              <div>
+                <p style={{ fontSize: '18px', fontWeight: 300, color: '#ccc', letterSpacing: '0em', marginBottom: '8px' }}>
+                  Ambiance du workspace
+                </p>
+                <p style={{ fontSize: '12px', color: '#2e2e2e', lineHeight: 1.7, letterSpacing: '0.02em' }}>
+                  Personnalise le fond, les reflets et les accents. Le changement se voit en direct dans le canvas.
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <ColorField label="Fond" value={local.workspaceBase} onChange={v => previewSet('workspaceBase', v)} />
+                <ColorField label="Accent" value={local.workspaceAccent} onChange={v => previewSet('workspaceAccent', v)} />
+                <ColorField label="Glow" value={local.workspaceGlow} onChange={v => previewSet('workspaceGlow', v)} />
+                <div style={{
+                  minHeight: 56,
+                  border: '1px solid #141414',
+                  background: `linear-gradient(135deg, ${local.workspaceBase}, ${local.workspaceAccent}22, ${local.workspaceGlow}26)`,
+                }} />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <p style={{ fontSize: '9px', letterSpacing: '0.18em', color: '#222', fontFamily: 'ui-monospace, monospace', fontWeight: 600 }}>
+                  MOUVEMENT
+                </p>
+                {[
+                  { id: 'calm', label: 'Calme' },
+                  { id: 'alive', label: 'Vivant' },
+                  { id: 'still', label: 'Fixe' },
+                ].map(option => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => previewSet('workspaceMotion', option.id)}
+                    style={{
+                      textAlign: 'left',
+                      background: local.workspaceMotion === option.id ? '#101010' : 'transparent',
+                      border: `1px solid ${local.workspaceMotion === option.id ? '#2e2e2e' : '#141414'}`,
+                      color: local.workspaceMotion === option.id ? '#aaa' : '#333',
+                      fontSize: '11px',
+                      padding: '10px 14px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    {option.label}
                   </button>
                 ))}
               </div>

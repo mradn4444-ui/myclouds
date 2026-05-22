@@ -2,21 +2,19 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Rnd } from 'react-rnd'
 import {
   FileText, Image as ImageIcon, Music, Film, File,
-  StickyNote, Trash2, Upload, Sparkles, Settings, Eye, Globe, ExternalLink,
-  Lightbulb,
+  StickyNote, Trash2, Upload, Settings, Eye, Globe, ExternalLink,
+  ZoomIn, ZoomOut, LocateFixed,
 } from 'lucide-react'
 import CategorySidebar, { type Category, type Folder } from './CategorySidebar'
-import AIPanel from './AIPanel'
 import SettingsPanel from './SettingsPanel'
 import FilePreviewModal from './FilePreviewModal'
-import SmartSuggest, { type OrganizeResult } from './SmartSuggest'
 import PdfExport from './PdfExport'
-import SmartOrganizeModal from './SmartOrganizeModal'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { useAuth } from '../hooks/useAuth'
 import { useItems, type CanvasItem } from '../hooks/useItems'
 import { useCategories } from '../hooks/useCategories'
 import { useFileUpload } from '../hooks/useFileUpload'
+import { getAuthedAssetUrl } from '../lib/api'
 
 export type { CanvasItem } from '../hooks/useItems'
 
@@ -54,35 +52,74 @@ function typeBadge(mime?: string): string {
   return mime.split('/').pop()?.toUpperCase().slice(0, 4) ?? 'FILE'
 }
 
+const CANVAS_WIDTH = 4200
+const CANVAS_HEIGHT = 2800
+const MIN_ZOOM = 0.35
+const MAX_ZOOM = 2.25
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function safeColor(value: string | undefined, fallback: string) {
+  return value && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback
+}
 
 export default function CanvasWorkspace() {
   // Hooks pour la persistance DB
   const { items, loading: itemsLoading, error: itemsError, loadItems, createItem, updateItem: updateItemDB, deleteItem: deleteItemDB } = useItems()
-  const { categories, folders, loading: catsLoading, loadCategories, createCategory, updateCategory, deleteCategory, createFolder, deleteFolder } = useCategories()
+  const { categories, folders, loading: catsLoading, loadCategories, createCategory, updateCategory, deleteCategory, createFolder, updateFolder, deleteFolder } = useCategories()
   const { upload, uploading: uploadingFile } = useFileUpload()
 
   // État local
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null)
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
-  const [aiOpen, setAiOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [previewItem, setPreviewItem] = useState<CanvasItem | null>(null)
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
-  const [smartFiles, setSmartFiles] = useState<CanvasItem[]>([])
   const [urlDialogOpen, setUrlDialogOpen] = useState(false)
   const [urlInput, setUrlInput] = useState('')
-  const [organizeModalOpen, setOrganizeModalOpen] = useState(false)
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [isPanning, setIsPanning] = useState(false)
+  const [showWelcome, setShowWelcome] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const urlInputRef = useRef<HTMLInputElement>(null)
-  const { profile, updateProfile } = useUserProfile()
-  const { logout } = useAuth()
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const zoomRef = useRef(1)
+  const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
+  const pinchRef = useRef<{ distance: number; zoom: number; worldX: number; worldY: number; centerX: number; centerY: number } | null>(null)
+  const { profile, updateProfile, previewProfile } = useUserProfile()
+  const { user, logout } = useAuth()
 
   // Charger les données au montage
   useEffect(() => {
     loadItems()
     loadCategories()
   }, [loadItems, loadCategories])
+
+  useEffect(() => {
+    const syncCreatedItem = () => {
+      loadItems()
+    }
+    window.addEventListener('mycloud:item-created', syncCreatedItem)
+    return () => window.removeEventListener('mycloud:item-created', syncCreatedItem)
+  }, [loadItems])
+
+  useEffect(() => {
+    zoomRef.current = zoom
+  }, [zoom])
+
+  useEffect(() => {
+    if (!user?.id) return
+    const key = `mycloud-welcome:${user.id}`
+    if (sessionStorage.getItem(key)) return
+    sessionStorage.setItem(key, '1')
+    setShowWelcome(true)
+    const timer = window.setTimeout(() => setShowWelcome(false), 4200)
+    return () => window.clearTimeout(timer)
+  }, [user?.id])
 
   const handleCategorySelect = (id: string | null) => {
     setActiveCategoryId(id)
@@ -142,7 +179,6 @@ export default function CanvasWorkspace() {
   const addFiles = useCallback(
     async (files: FileList | File[]) => {
       const list = Array.from(files)
-      const newItems: CanvasItem[] = []
 
       for (let i = 0; i < list.length; i++) {
         const file = list[i];
@@ -152,62 +188,25 @@ export default function CanvasWorkspace() {
           const isPdf = file.type.includes('pdf')
           const isAudio = file.type.startsWith('audio/')
 
-          // Créer un item avec les dimensions appropriées
-          await createItem({
-            type: 'file',
-            title: file.name,
-            fileUrl: response.downloadUrl,
-            mimeType: file.type,
+          const layout = {
             x: 60 + ((items.length + i) % 4) * 44,
             y: 60 + ((items.length + i) % 3) * 54,
             width: isImage ? 260 : isPdf ? 220 : isAudio ? 260 : 210,
             height: isImage ? 210 : isPdf ? 280 : isAudio ? 100 : 130,
             categoryId: activeCategoryId,
             folderId: activeFolderId,
-          })
+          }
 
-          newItems.push(response.item as CanvasItem)
+          await updateItemDB(response.item.id, layout)
         } catch (err) {
           console.error('Upload failed:', err)
         }
       }
 
-      if (list.length >= 2) {
-        setTimeout(() => setSmartFiles(newItems), 300)
-      }
+      await loadItems()
     },
-    [activeCategoryId, activeFolderId, items.length, createItem, upload]
+    [activeCategoryId, activeFolderId, items.length, loadItems, updateItemDB, upload]
   )
-
-  const handleSmartApply = async (_action: string, result: OrganizeResult) => {
-    if (result.action === 'folders' && result.folders?.length) {
-      for (const name of result.folders) {
-        if (!activeCategoryId) return
-        try {
-          await createFolder(activeCategoryId, name)
-        } catch (err) {
-          console.error(err)
-        }
-      }
-    }
-    if (result.action === 'summarize' || result.action === 'organize' || result.action === 'tags') {
-      try {
-        await createItem({
-          type: 'note',
-          title: '✦ Suggestion IA',
-          content: result.message,
-          x: 80,
-          y: 80,
-          width: 280,
-          height: 200,
-          categoryId: activeCategoryId,
-          folderId: activeFolderId,
-        })
-      } catch (err) {
-        console.error(err)
-      }
-    }
-  }
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
@@ -251,15 +250,132 @@ export default function CanvasWorkspace() {
   ].filter(Boolean).join(' / ')
 
   const displayName = profile.pseudo || profile.prenom || null
+  const workspaceBase = safeColor(profile.workspaceBase, '#060606')
+  const workspaceAccent = safeColor(profile.workspaceAccent, '#8be7ff')
+  const workspaceGlow = safeColor(profile.workspaceGlow, '#b7a6ff')
+  const workspaceMotion = profile.workspaceMotion || 'calm'
+
+  const zoomAt = useCallback((nextZoom: number, clientX?: number, clientY?: number) => {
+    const canvas = canvasRef.current
+    const rect = canvas?.getBoundingClientRect()
+    const targetZoom = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM)
+
+    if (!rect || clientX === undefined || clientY === undefined) {
+      setZoom(targetZoom)
+      return
+    }
+
+    const screenX = clientX - rect.left
+    const screenY = clientY - rect.top
+    setPan(currentPan => {
+      const currentZoom = zoomRef.current
+      const worldX = (screenX - currentPan.x) / currentZoom
+      const worldY = (screenY - currentPan.y) / currentZoom
+      return {
+        x: screenX - worldX * targetZoom,
+        y: screenY - worldY * targetZoom,
+      }
+    })
+    setZoom(targetZoom)
+  }, [])
+
+  const resetView = useCallback(() => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+  }, [])
+
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    if (e.shiftKey) {
+      setPan(current => ({ x: current.x - e.deltaY, y: current.y - e.deltaX }))
+      return
+    }
+    const factor = Math.exp(-e.deltaY * 0.0016)
+    zoomAt(zoomRef.current * factor, e.clientX, e.clientY)
+  }
+
+  const canPanFromTarget = (target: EventTarget | null) => {
+    const element = target as HTMLElement | null
+    return Boolean(element?.classList.contains('workspace-canvas') || element?.classList.contains('canvas-stage-bg'))
+  }
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!canPanFromTarget(e.target)) return
+    panStartRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y }
+    setIsPanning(true)
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const start = panStartRef.current
+    if (!start) return
+    setPan({ x: start.panX + e.clientX - start.x, y: start.panY + e.clientY - start.y })
+  }
+
+  const stopPanning = (e?: React.PointerEvent<HTMLDivElement>) => {
+    panStartRef.current = null
+    setIsPanning(false)
+    if (e?.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+  }
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length !== 2) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const first = e.touches[0]
+    const second = e.touches[1]
+    const centerX = (first.clientX + second.clientX) / 2 - rect.left
+    const centerY = (first.clientY + second.clientY) / 2 - rect.top
+    const distance = Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY)
+    pinchRef.current = {
+      distance,
+      zoom: zoomRef.current,
+      centerX,
+      centerY,
+      worldX: (centerX - pan.x) / zoomRef.current,
+      worldY: (centerY - pan.y) / zoomRef.current,
+    }
+  }
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    const start = pinchRef.current
+    if (!start || e.touches.length !== 2) return
+    e.preventDefault()
+    const first = e.touches[0]
+    const second = e.touches[1]
+    const nextZoom = clamp(start.zoom * Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY) / start.distance, MIN_ZOOM, MAX_ZOOM)
+    setZoom(nextZoom)
+    setPan({
+      x: start.centerX - start.worldX * nextZoom,
+      y: start.centerY - start.worldY * nextZoom,
+    })
+  }
+
+  const handleTouchEnd = () => {
+    pinchRef.current = null
+  }
 
   return (
-    <div className="mycloud-shell" style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#060606', position: 'relative' }}>
-      {/* Dot grid */}
-      <div className="ambient-grid" style={{
-        position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
-        backgroundImage: 'radial-gradient(circle, #181818 1px, transparent 1px)',
-        backgroundSize: '30px 30px',
-      }} />
+    <div
+      className="mycloud-shell"
+      data-motion={workspaceMotion}
+      style={{
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        background: workspaceBase,
+        position: 'relative',
+        '--workspace-base': workspaceBase,
+        '--workspace-accent': workspaceAccent,
+        '--workspace-glow': workspaceGlow,
+      } as React.CSSProperties}
+    >
+      <div className="ambient-grid" />
+      <div className="workspace-ambient-orbit" />
+      <div className="workspace-ambient-glow workspace-ambient-glow-a" />
+      <div className="workspace-ambient-glow workspace-ambient-glow-b" />
 
       {/* Header */}
       <header className="mycloud-header" style={{
@@ -340,30 +456,11 @@ export default function CanvasWorkspace() {
             profile={profile}
           />
 
-          <button
-            type="button"
-            onClick={() => setOrganizeModalOpen(true)}
-            className="header-btn"
-            title="Organiser une idée"
-          >
-            <Lightbulb style={{ width: '12px', height: '12px' }} />
-            <span>Organiser</span>
-          </button>
-
           <div style={{ width: '1px', height: '16px', background: '#161616', margin: '0 4px' }} />
 
           <button
             type="button"
-            onClick={() => { setAiOpen(o => !o); setSettingsOpen(false) }}
-            className={`header-btn-icon${aiOpen ? ' active' : ''}`}
-            title="Assistant IA"
-          >
-            <Sparkles style={{ width: '13px', height: '13px' }} />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setSettingsOpen(o => !o); setAiOpen(false) }}
+            onClick={() => setSettingsOpen(o => !o)}
             className={`header-btn-icon${settingsOpen ? ' active' : ''}`}
             title="Paramètres"
           >
@@ -383,7 +480,7 @@ export default function CanvasWorkspace() {
           onAdd={addCategory}
           onAddFolder={addFolder}
           onRename={(id, name) => updateCategory(id, { name }).catch(console.error)}
-          onRenameFolder={(id, name) => updateCategory(id, { name }).catch(console.error)}
+          onRenameFolder={(id, name) => updateFolder(id, { name }).catch(console.error)}
           onDelete={(id) => { deleteCategory(id).catch(console.error); if (activeCategoryId === id) handleCategorySelect(null) }}
           onDeleteFolder={(id) => { deleteFolder(id).catch(console.error); if (activeFolderId === id) setActiveFolderId(null) }}
           onAvatarChange={() => {}} // TODO: implement avatar
@@ -391,12 +488,22 @@ export default function CanvasWorkspace() {
 
         {/* Canvas */}
         <div
-          className={`workspace-canvas${dragOver ? ' is-drag-over' : ''}`}
+          ref={canvasRef}
+          className={`workspace-canvas${dragOver ? ' is-drag-over' : ''}${isPanning ? ' is-panning' : ''}`}
           style={{
             flex: 1, position: 'relative', overflow: 'hidden',
             outline: dragOver ? '2px solid #ffffff15' : 'none',
             outlineOffset: '-3px',
+            touchAction: 'none',
           }}
+          onWheel={handleWheel}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={stopPanning}
+          onPointerCancel={stopPanning}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
           onDragOver={e => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
@@ -424,17 +531,45 @@ export default function CanvasWorkspace() {
             </div>
           )}
 
-          {visibleItems.map(item => {
+          <div
+            className="zoom-dock"
+            aria-label="Controle du zoom"
+          >
+            <button type="button" onClick={() => zoomAt(zoom * 1.16)} title="Zoom avant">
+              <ZoomIn size={14} />
+            </button>
+            <button type="button" onClick={resetView} title="Recentrer">
+              <LocateFixed size={14} />
+              <span>{Math.round(zoom * 100)}%</span>
+            </button>
+            <button type="button" onClick={() => zoomAt(zoom / 1.16)} title="Zoom arriere">
+              <ZoomOut size={14} />
+            </button>
+          </div>
+
+          <div
+            className="canvas-stage"
+            style={{
+              width: CANVAS_WIDTH,
+              height: CANVAS_HEIGHT,
+              transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
+              transition: isPanning ? 'none' : 'transform 0.16s cubic-bezier(0.16, 1, 0.3, 1)',
+            }}
+          >
+            <div className="canvas-stage-bg" />
+            {visibleItems.map(item => {
             const Icon = item.type === 'note' ? StickyNote : item.type === 'browser' ? Globe : iconForMime(item.mimeType)
             const isImage = item.mimeType?.startsWith('image/')
             const isAudio = item.mimeType?.startsWith('audio/')
             const isVideo = item.mimeType?.startsWith('video/')
             const isPdf   = item.mimeType?.includes('pdf')
             const isHovered = hoveredCard === item.id
+            const fileUrl = getAuthedAssetUrl(item.fileUrl)
 
             return (
               <Rnd
                 key={item.id}
+                scale={zoom}
                 size={{ width: item.width, height: item.height }}
                 position={{ x: item.x, y: item.y }}
                 minWidth={150} minHeight={item.type === 'note' ? 100 : 80}
@@ -535,6 +670,7 @@ export default function CanvasWorkspace() {
                         className="card-note-input"
                         value={item.content ?? ''}
                         onChange={e => updateItem(item.id, { content: e.target.value })}
+                        onPointerDown={e => e.stopPropagation()}
                         placeholder="Écris ici…"
                         style={{
                           width: '100%', height: '100%',
@@ -545,13 +681,13 @@ export default function CanvasWorkspace() {
                           boxSizing: 'border-box',
                         }}
                       />
-                    ) : isImage && item.fileUrl ? (
+                    ) : isImage && fileUrl ? (
                       <div
                         style={{ width: '100%', height: '100%', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
                         onClick={() => setPreviewItem(item)}
                       >
                         <img
-                          src={item.fileUrl}
+                          src={fileUrl}
                           alt={item.title}
                           style={{
                             width: '100%', height: '100%',
@@ -571,7 +707,7 @@ export default function CanvasWorkspace() {
                           </div>
                         )}
                       </div>
-                    ) : isAudio && item.fileUrl ? (
+                    ) : isAudio && fileUrl ? (
                       <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', justifyContent: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <Music style={{ width: 14, height: 14, color: '#333' }} />
@@ -579,17 +715,17 @@ export default function CanvasWorkspace() {
                         </div>
                         <audio
                           controls
-                          src={item.fileUrl}
+                          src={fileUrl}
                           style={{ width: '100%', height: '28px', filter: 'invert(1) hue-rotate(180deg)', opacity: 0.7 }}
                         />
                       </div>
-                    ) : isVideo && item.fileUrl ? (
+                    ) : isVideo && fileUrl ? (
                       <div
                         style={{ width: '100%', height: '100%', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
                         onClick={() => setPreviewItem(item)}
                       >
                         <video
-                          src={item.fileUrl}
+                          src={fileUrl}
                           style={{
                             width: '100%', height: '100%',
                             objectFit: 'cover',
@@ -607,7 +743,7 @@ export default function CanvasWorkspace() {
                           </div>
                         )}
                       </div>
-                    ) : isPdf && item.fileUrl ? (
+                    ) : isPdf && fileUrl ? (
                       <div
                         style={{
                           width: '100%', height: '100%', cursor: 'pointer', position: 'relative',
@@ -659,6 +795,7 @@ export default function CanvasWorkspace() {
               </Rnd>
             )
           })}
+          </div>
         </div>
       </div>
 
@@ -741,64 +878,25 @@ export default function CanvasWorkspace() {
         </div>
       )}
 
-      <AIPanel
-        open={aiOpen}
-        onClose={() => setAiOpen(false)}
-        activeCategory={activeCategory}
-        items={items}
-        profile={profile}
-        onOpenUrl={addBrowserCard}
-      />
+      {showWelcome && (
+        <div className="workspace-welcome-toast">
+          <span>Welcome back{displayName ? `, ${displayName}` : ''}</span>
+          <strong>Ready to organize your ideas?</strong>
+        </div>
+      )}
+
       <SettingsPanel
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         profile={profile}
         onSave={updateProfile}
+        onPreview={previewProfile}
       />
       <FilePreviewModal
         item={previewItem}
         onClose={() => setPreviewItem(null)}
       />
 
-      {smartFiles.length >= 2 && (
-        <SmartSuggest
-          newFiles={smartFiles}
-          allItems={items}
-          categories={categories}
-          onDismiss={() => setSmartFiles([])}
-          onApply={(action, result) => { handleSmartApply(action, result); setSmartFiles([]) }}
-        />
-      )}
-
-      <SmartOrganizeModal
-        open={organizeModalOpen}
-        onClose={() => setOrganizeModalOpen(false)}
-        onApply={async (result) => {
-          // Create categories/folders from result
-          for (const folderName of result.actions.createFolders) {
-            const newCat = await createCategory(folderName, '')
-            if (result.structure.tasks.length > 0) {
-              for (const task of result.structure.tasks.slice(0, 2)) {
-                await createItem({
-                  title: task.title,
-                  content: `Priority: ${task.priority}`,
-                  type: 'note',
-                  categoryId: newCat.id,
-                })
-              }
-            }
-          }
-          // Create document
-          if (result.actions.createDocument) {
-            await createItem({
-              title: result.title,
-              content: result.summary,
-              type: 'note',
-              categoryId: activeCategoryId || undefined,
-            })
-          }
-        }}
-      />
     </div>
   )
 }

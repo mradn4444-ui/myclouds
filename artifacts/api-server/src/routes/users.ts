@@ -32,7 +32,17 @@ router.get("/profile", authMiddleware, (req: AuthRequest, res) => {
 router.patch("/profile", authMiddleware, (req: AuthRequest, res) => {
   try {
     const userId = req.userId!;
-    const { nom, prenom, pseudo, age, aiStyle } = req.body;
+    const {
+      nom,
+      prenom,
+      pseudo,
+      age,
+      aiStyle,
+      workspaceBase,
+      workspaceAccent,
+      workspaceGlow,
+      workspaceMotion,
+    } = req.body;
 
     const existing = db
       .select()
@@ -51,6 +61,10 @@ router.patch("/profile", authMiddleware, (req: AuthRequest, res) => {
       pseudo: pseudo !== undefined ? pseudo : existing.pseudo,
       age: age !== undefined ? age : existing.age,
       aiStyle: aiStyle !== undefined ? aiStyle : existing.aiStyle,
+      workspaceBase: workspaceBase !== undefined ? workspaceBase : existing.workspaceBase,
+      workspaceAccent: workspaceAccent !== undefined ? workspaceAccent : existing.workspaceAccent,
+      workspaceGlow: workspaceGlow !== undefined ? workspaceGlow : existing.workspaceGlow,
+      workspaceMotion: workspaceMotion !== undefined ? workspaceMotion : existing.workspaceMotion,
       updatedAt: new Date(),
     };
 

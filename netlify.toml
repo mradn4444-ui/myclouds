@@ -1,12 +1,14 @@
 [build]
-  base = "artifacts/mycloud"
-  command = "PORT=3000 BASE_PATH=/ pnpm build"
-  publish = "dist/public"
+  command = "pnpm --filter @workspace/mycloud build"
+  publish = "artifacts/mycloud/dist/public"
 
 [build.environment]
-  NODE_VERSION = "20"
+  NODE_VERSION = "22"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Set VITE_API_BASE_URL in Netlify to your deployed API origin.
+# Example: https://api.your-domain.com

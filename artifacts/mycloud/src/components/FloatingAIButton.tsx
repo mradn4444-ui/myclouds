@@ -1,7 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Loader2, MessageSquare, Pencil, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
+import {
+  Check,
+  FileText,
+  Image as ImageIcon,
+  LayoutGrid,
+  ListChecks,
+  Loader2,
+  MessageSquare,
+  Pencil,
+  Plus,
+  Send,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useAI } from "../hooks/useAI";
 import { type Conversation, type ConversationMessage, useConversationMessages, useConversations } from "../hooks/useConversations";
+import { useItems } from "../hooks/useItems";
+import AIResponseContent from "./AIResponseContent";
 
 interface AIMessage {
   id: string;
@@ -24,6 +40,34 @@ function fallbackTitle(text: string) {
   return title || "Nouvelle conversation";
 }
 
+const quickActions = [
+  {
+    label: "Organiser",
+    icon: LayoutGrid,
+    prompt: "Organise cette idee en espace de travail clair avec dossiers, notes, taches et prochaines actions : ",
+  },
+  {
+    label: "Image",
+    icon: ImageIcon,
+    prompt: "Cree une image premium et futuriste pour : ",
+  },
+  {
+    label: "Document",
+    icon: FileText,
+    prompt: "Genere un document structure, propre et facile a lire sur : ",
+  },
+  {
+    label: "Checklist",
+    icon: ListChecks,
+    prompt: "Transforme cette idee en checklist actionnable : ",
+  },
+];
+
+function wantsImage(text: string): boolean {
+  return /\b(image|images|illustration|visuel|visuelle|dessin|affiche|poster|logo|photo|cover|banniere|wallpaper)\b/i.test(text)
+    && /\b(cree|creer|cr[eéè]e|cr[eéè]er|genere|g[eé]n[eè]re|dessine|fabrique|imagine|make|create|generate)\b/i.test(text);
+}
+
 export function FloatingAIButton() {
   const [isOpen, setIsOpen] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState<string>();
@@ -32,7 +76,8 @@ export function FloatingAIButton() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { chat, loading } = useAI();
+  const { chat, generateImage, loading } = useAI();
+  const { createItem } = useItems();
   const {
     conversations,
     loading: conversationsLoading,
@@ -126,7 +171,14 @@ export function FloatingAIButton() {
     setInput("");
 
     try {
-      const response = await chat([{ role: "user", content: text }], { mode: "chat", conversationId });
+      const response = wantsImage(text)
+        ? await generateImage(text, { conversationId })
+        : await chat([{ role: "user", content: text }], { mode: "chat", conversationId });
+
+      if (response.conversationId && response.conversationId !== conversationId) {
+        setActiveConversationId(response.conversationId);
+      }
+
       const assistantMessage: AIMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
@@ -147,6 +199,23 @@ export function FloatingAIButton() {
         },
       ]);
     }
+  };
+
+  const handleSaveImage = async (image: { title: string; imageUrl: string; content: string }) => {
+    await createItem({
+      type: "file",
+      title: image.title,
+      fileUrl: image.imageUrl,
+      mimeType: "image/svg+xml",
+      fileSize: image.imageUrl.length,
+      x: 140 + Math.round(Math.random() * 160),
+      y: 120 + Math.round(Math.random() * 120),
+      width: 420,
+      height: 280,
+      aiSummary: image.content,
+      tags: JSON.stringify(["ai-image", "visual"]),
+    });
+    window.dispatchEvent(new CustomEvent("mycloud:item-created"));
   };
 
   return (
@@ -237,7 +306,11 @@ export function FloatingAIButton() {
               ) : (
                 messages.map((message) => (
                   <div key={message.id} className={`floating-ai-message ${message.role}`}>
-                    {message.content}
+                    {message.role === "assistant" ? (
+                      <AIResponseContent content={message.content} onSaveImage={handleSaveImage} />
+                    ) : (
+                      message.content
+                    )}
                   </div>
                 ))
               )}
@@ -251,6 +324,24 @@ export function FloatingAIButton() {
               <div ref={messagesEndRef} />
             </div>
 
+            <div className="floating-ai-quick-actions" aria-label="Actions IA rapides">
+              {quickActions.map((action) => {
+                const Icon = action.icon;
+                return (
+                  <button
+                    key={action.label}
+                    type="button"
+                    onClick={() => setInput(action.prompt)}
+                    disabled={loading}
+                    title={action.label}
+                  >
+                    <Icon size={14} />
+                    <span>{action.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
             <div className="floating-ai-inputbar">
               <textarea
                 value={input}
@@ -261,7 +352,7 @@ export function FloatingAIButton() {
                     void handleSendMessage();
                   }
                 }}
-                placeholder="Demander, retrouver, organiser..."
+                placeholder="Demander, organiser, creer une image..."
                 disabled={loading}
                 rows={2}
               />

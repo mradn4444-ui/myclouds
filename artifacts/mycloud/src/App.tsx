@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import CanvasWorkspace from "@/components/CanvasWorkspace";
 import { FloatingAIButton } from "@/components/FloatingAIButton";
 import HomePage from "@/pages/home";
+import WelcomePage from "@/pages/welcome";
 import AuthPage from "@/pages/auth";
 import SignupPage from "@/pages/auth-signup";
 import NotFound from "@/pages/not-found";
@@ -43,10 +44,13 @@ function Router() {
       <Route path="/app">
         {() => <ProtectedRoute component={CanvasWorkspace} />}
       </Route>
+      <Route path="/welcome">
+        {() => <ProtectedRoute component={WelcomePage} />}
+      </Route>
       <Route path="/auth" component={AuthPage} />
       <Route path="/auth/signup" component={SignupPage} />
       <Route path="/dashboard">
-        {() => { window.location.replace('/app'); return null; }}
+        {() => { window.location.replace('/welcome'); return null; }}
       </Route>
       <Route component={NotFound} />
     </Switch>

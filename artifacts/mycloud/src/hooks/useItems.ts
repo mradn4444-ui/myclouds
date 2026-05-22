@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useApi } from "./useApi";
 
 export interface CanvasItem {
@@ -8,6 +8,7 @@ export interface CanvasItem {
   content?: string;
   fileUrl?: string;
   mimeType?: string;
+  fileSize?: number | null;
   url?: string;
   x: number;
   y: number;
@@ -21,11 +22,18 @@ export interface CanvasItem {
   updatedAt?: Date;
 }
 
+type CreateCanvasItem = Omit<
+  CanvasItem,
+  "id" | "createdAt" | "updatedAt" | "x" | "y" | "width" | "height"
+> &
+  Partial<Pick<CanvasItem, "x" | "y" | "width" | "height">>;
+
 export function useItems() {
   const { api } = useApi();
   const [items, setItems] = useState<CanvasItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const updateVersionsRef = useRef<Record<string, number>>({});
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -41,7 +49,7 @@ export function useItems() {
   }, [api]);
 
   const createItem = useCallback(
-    async (item: Omit<CanvasItem, "id" | "createdAt" | "updatedAt">) => {
+    async (item: CreateCanvasItem) => {
       try {
         const newItem = await api<CanvasItem>("/items", {
           method: "POST",
@@ -60,12 +68,22 @@ export function useItems() {
 
   const updateItem = useCallback(
     async (id: string, updates: Partial<CanvasItem>) => {
+      const version = (updateVersionsRef.current[id] ?? 0) + 1;
+      updateVersionsRef.current[id] = version;
+      setItems((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
+      );
+
       try {
         const updated = await api<CanvasItem>(`/items/${id}`, {
           method: "PATCH",
           body: JSON.stringify(updates),
         });
-        setItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
+
+        if (updateVersionsRef.current[id] === version) {
+          setItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
+        }
+
         return updated;
       } catch (err) {
         const message = err instanceof Error ? err.message : "Erreur";

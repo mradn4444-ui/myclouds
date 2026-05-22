@@ -10,6 +10,10 @@ export const usersTable = sqliteTable("users", {
   pseudo: text("pseudo"),
   age: text("age"),
   aiStyle: text("ai_style"),
+  workspaceBase: text("workspace_base"),
+  workspaceAccent: text("workspace_accent"),
+  workspaceGlow: text("workspace_glow"),
+  workspaceMotion: text("workspace_motion"),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).defaultNow().notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).defaultNow().notNull(),
 });
@@ -22,6 +26,10 @@ export const insertUserSchema = z.object({
   pseudo: z.string().optional().nullable(),
   age: z.string().optional().nullable(),
   aiStyle: z.string().optional().nullable(),
+  workspaceBase: z.string().optional().nullable(),
+  workspaceAccent: z.string().optional().nullable(),
+  workspaceGlow: z.string().optional().nullable(),
+  workspaceMotion: z.string().optional().nullable(),
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;

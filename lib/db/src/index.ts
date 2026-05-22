@@ -33,6 +33,10 @@ sqlite.exec(`
     pseudo TEXT,
     age TEXT,
     ai_style TEXT,
+    workspace_base TEXT,
+    workspace_accent TEXT,
+    workspace_glow TEXT,
+    workspace_motion TEXT,
     created_at INTEGER NOT NULL DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)),
     updated_at INTEGER NOT NULL DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer))
   );
@@ -118,6 +122,21 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_conversation_messages_conv ON conversation_messages(conversation_id);
   CREATE INDEX IF NOT EXISTS idx_conversation_messages_user ON conversation_messages(user_id);
 `);
+
+for (const statement of [
+  "ALTER TABLE users ADD COLUMN workspace_base TEXT",
+  "ALTER TABLE users ADD COLUMN workspace_accent TEXT",
+  "ALTER TABLE users ADD COLUMN workspace_glow TEXT",
+  "ALTER TABLE users ADD COLUMN workspace_motion TEXT",
+]) {
+  try {
+    sqlite.exec(statement);
+  } catch (err) {
+    if (!(err instanceof Error) || !err.message.includes("duplicate column name")) {
+      throw err;
+    }
+  }
+}
 
 export const db = drizzle(sqlite, { schema });
 

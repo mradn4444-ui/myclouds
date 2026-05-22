@@ -1,11 +1,11 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 
-const rawPort = process.env["PORT"];
+const rawPort = process.env["PORT"] ?? (process.env["NODE_ENV"] === "production" ? undefined : "8081");
 
 if (!rawPort) {
   throw new Error(
-    "PORT environment variable is required but was not provided.",
+    "PORT environment variable is required in production but was not provided.",
   );
 }
 

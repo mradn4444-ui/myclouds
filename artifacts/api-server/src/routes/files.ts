@@ -117,7 +117,12 @@ router.get("/download/:id", authMiddleware, (req: AuthRequest, res) => {
       return res.status(404).json({ error: "Fichier supprimé" });
     }
 
-    res.download(file.storagePath, file.originalName);
+    res.setHeader("Content-Type", file.mimeType);
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${encodeURIComponent(file.originalName)}"`,
+    );
+    res.sendFile(file.storagePath);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erreur" });

@@ -17,11 +17,11 @@ export default function AuthPage() {
     const token = params.get('token')
     if (token) {
       acceptToken(token)
-        .then(() => navigate('/'))
+        .then(() => navigate('/welcome', { replace: true }))
         .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Session OAuth invalide'))
       return
     }
-    if (user) { navigate('/'); return; }
+    if (user) { navigate('/welcome', { replace: true }); return; }
     const msg = params.get('message')
     if (msg) setMessage(decodeURIComponent(msg))
   }, [search, user, navigate, acceptToken])
@@ -35,7 +35,7 @@ export default function AuthPage() {
     const password = (form.elements.namedItem('password') as HTMLInputElement).value
     try {
       await login(email, password)
-      navigate('/app')
+      navigate('/welcome')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erreur de connexion')
     } finally {

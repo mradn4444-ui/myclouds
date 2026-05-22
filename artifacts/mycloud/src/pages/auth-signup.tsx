@@ -11,7 +11,7 @@ export default function SignupPage() {
   const [, navigate] = useLocation()
 
   useEffect(() => {
-    if (user) navigate('/')
+    if (user) navigate('/welcome', { replace: true })
   }, [user, navigate])
 
   const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -23,7 +23,7 @@ export default function SignupPage() {
     const password = (form.elements.namedItem('password') as HTMLInputElement).value
     try {
       await register(email, password)
-      navigate('/app')
+      navigate('/welcome')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erreur lors de l'inscription")
     } finally {

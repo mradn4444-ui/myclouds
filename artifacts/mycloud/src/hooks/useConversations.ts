@@ -198,5 +198,3 @@ export function useConversationMessages(conversationId?: string) {
     addMessage,
   };
 }
-
-export type { Conversation, ConversationMessage };

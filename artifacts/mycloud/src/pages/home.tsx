@@ -9,7 +9,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!loading && user) {
-      navigate("/app", { replace: true });
+      navigate("/welcome", { replace: true });
     }
   }, [loading, user, navigate]);
 
