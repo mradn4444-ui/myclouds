@@ -5,13 +5,36 @@ export type ApiErrorBody = {
   message?: string;
 };
 
+function localApiBase() {
+  if (typeof window === "undefined") return "";
+
+  const { hostname, protocol } = window.location;
+  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0") {
+    return "http://localhost:8081";
+  }
+
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) {
+    return `${protocol}//${hostname}:8081`;
+  }
+
+  return "";
+}
+
 export function getApiBase() {
-  return import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "";
+  return import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") || localApiBase();
 }
 
 export function getApiUrl(endpoint: string) {
   const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-  return `${getApiBase()}/api${path}`;
+  const base = getApiBase();
+
+  if (!base && import.meta.env.PROD) {
+    throw new Error(
+      "Configuration API manquante: ajoute VITE_API_BASE_URL dans Netlify avec l'URL de ton API deployee."
+    );
+  }
+
+  return `${base}/api${path}`;
 }
 
 export function getAuthedAssetUrl(pathOrUrl?: string | null) {
@@ -47,7 +70,7 @@ export async function parseJsonResponse<T>(response: Response): Promise<T> {
       const preview = raw.trim().slice(0, 160);
       const isHtml = preview.startsWith("<!DOCTYPE") || preview.startsWith("<html");
       const hint = isHtml
-        ? "Le serveur a renvoye une page HTML au lieu de JSON. Verifie que l'API tourne sur le port 8081."
+        ? `Le front a recu une page HTML au lieu de l'API JSON (${response.url}). En local, ouvre l'app via le serveur Vite ou lance l'API sur 8081. Sur Netlify, configure VITE_API_BASE_URL vers l'API deployee.`
         : `Le serveur n'a pas renvoye de JSON valide (${response.status} ${response.statusText || "reponse inconnue"}).`;
       throw new Error(preview ? `${hint} Apercu: ${preview}` : hint);
     }
@@ -67,9 +90,16 @@ export async function apiFetch<T>(endpoint: string, options?: RequestInit & { sk
     finalHeaders.Authorization = `Bearer ${token}`;
   }
 
+  let url: string;
+  try {
+    url = getApiUrl(endpoint);
+  } catch (err) {
+    throw err instanceof Error ? err : new Error("Configuration API invalide.");
+  }
+
   let response: Response;
   try {
-    response = await fetch(getApiUrl(endpoint), {
+    response = await fetch(url, {
       ...rest,
       headers: finalHeaders,
     });
