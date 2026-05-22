@@ -1,20 +1,18 @@
 import { Router } from "express";
-import { db, itemsTable, insertItemSchema, type Item } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { and, db, eq, itemsTable, insertItemSchema, type Item } from "@workspace/db";
 import { authMiddleware, type AuthRequest } from "../middlewares/auth";
 import { nanoid } from "nanoid";
 
 const router = Router();
 
 // GET /api/items - Lister tous les items de l'utilisateur
-router.get("/", authMiddleware, (req: AuthRequest, res) => {
+router.get("/", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId!;
-    const items = db
+    const items = await db
       .select()
       .from(itemsTable)
-      .where(eq(itemsTable.userId, userId))
-      .all();
+      .where(eq(itemsTable.userId, userId));
     res.json(items);
   } catch (err) {
     console.error(err);
@@ -23,15 +21,15 @@ router.get("/", authMiddleware, (req: AuthRequest, res) => {
 });
 
 // GET /api/items/:id - Récupérer un item spécifique
-router.get("/:id", authMiddleware, (req: AuthRequest, res) => {
+router.get("/:id", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const id = String(req.params.id);
     const userId = req.userId!;
-    const item = db
+    const [item] = await db
       .select()
       .from(itemsTable)
       .where(and(eq(itemsTable.id, id), eq(itemsTable.userId, userId)))
-      .get();
+      .limit(1);
 
     if (!item) return res.status(404).json({ error: "Item non trouvé" });
     res.json(item);
@@ -42,7 +40,7 @@ router.get("/:id", authMiddleware, (req: AuthRequest, res) => {
 });
 
 // POST /api/items - Créer un nouvel item
-router.post("/", authMiddleware, (req: AuthRequest, res) => {
+router.post("/", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId!;
     const result = insertItemSchema.safeParse(req.body);
@@ -69,11 +67,11 @@ router.post("/", authMiddleware, (req: AuthRequest, res) => {
       height: result.data.height ?? 300,
       aiSummary: result.data.aiSummary ?? null,
       tags: result.data.tags ?? null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
     };
 
-    db.insert(itemsTable).values(newItem).run();
+    await db.insert(itemsTable).values(newItem);
     res.status(201).json(newItem);
   } catch (err) {
     console.error(err);
@@ -82,29 +80,28 @@ router.post("/", authMiddleware, (req: AuthRequest, res) => {
 });
 
 // PATCH /api/items/:id - Mettre à jour un item
-router.patch("/:id", authMiddleware, (req: AuthRequest, res) => {
+router.patch("/:id", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const id = String(req.params.id);
     const userId = req.userId!;
 
-    const existing = db
+    const [existing] = await db
       .select()
       .from(itemsTable)
       .where(and(eq(itemsTable.id, id), eq(itemsTable.userId, userId)))
-      .get();
+      .limit(1);
 
     if (!existing) return res.status(404).json({ error: "Item non trouvé" });
 
     const updated = {
       ...existing,
       ...req.body,
-      updatedAt: new Date(),
+      updatedAt: Date.now(),
     };
 
-    db.update(itemsTable)
+    await db.update(itemsTable)
       .set(updated)
-      .where(and(eq(itemsTable.id, id), eq(itemsTable.userId, userId)))
-      .run();
+      .where(and(eq(itemsTable.id, id), eq(itemsTable.userId, userId)));
 
     res.json(updated);
   } catch (err) {
@@ -114,14 +111,13 @@ router.patch("/:id", authMiddleware, (req: AuthRequest, res) => {
 });
 
 // DELETE /api/items/:id - Supprimer un item
-router.delete("/:id", authMiddleware, (req: AuthRequest, res) => {
+router.delete("/:id", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const id = String(req.params.id);
     const userId = req.userId!;
 
-    db.delete(itemsTable)
-      .where(and(eq(itemsTable.id, id), eq(itemsTable.userId, userId)))
-      .run();
+    await db.delete(itemsTable)
+      .where(and(eq(itemsTable.id, id), eq(itemsTable.userId, userId)));
 
     res.json({ success: true });
   } catch (err) {

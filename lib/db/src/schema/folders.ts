@@ -1,9 +1,12 @@
-import { text, integer, sqliteTable } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { bigint, integer, text, pgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { usersTable } from "./users";
 import { categoriesTable } from "./categories";
 
-export const foldersTable = sqliteTable("folders", {
+const nowMs = sql`(floor(extract(epoch from now()) * 1000)::bigint)`;
+
+export const foldersTable = pgTable("folders", {
   id: text("id").primaryKey(),
   userId: text("user_id")
     .notNull()
@@ -14,7 +17,7 @@ export const foldersTable = sqliteTable("folders", {
   name: text("name").notNull(),
   parentFolderId: text("parent_folder_id"),
   order: integer("order").default(0),
-  createdAt: integer("created_at", { mode: "timestamp_ms" }).defaultNow().notNull(),
+  createdAt: bigint("created_at", { mode: "number" }).default(nowMs).notNull(),
 });
 
 export const insertFolderSchema = z.object({

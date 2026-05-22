@@ -1,8 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { db, usersTable, type User } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, eq, usersTable, type User } from "@workspace/db";
 import { nanoid } from "nanoid";
 import { authMiddleware } from "../middlewares/auth";
 
@@ -64,12 +63,12 @@ function normalizeEmail(email?: string | null) {
   return email?.toLowerCase().trim() || null;
 }
 
-function findOrCreateOAuthUser(email: string, provider: OAuthProvider): User {
-  const existing = db
+async function findOrCreateOAuthUser(email: string, provider: OAuthProvider): Promise<User> {
+  const [existing] = await db
     .select()
     .from(usersTable)
     .where(eq(usersTable.email, email))
-    .get();
+    .limit(1);
 
   if (existing) return existing;
 
@@ -86,11 +85,11 @@ function findOrCreateOAuthUser(email: string, provider: OAuthProvider): User {
     workspaceAccent: null,
     workspaceGlow: null,
     workspaceMotion: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
   };
 
-  db.insert(usersTable).values(user).run();
+  await db.insert(usersTable).values(user);
   return user;
 }
 
@@ -115,11 +114,11 @@ router.post("/register", async (req, res) => {
   }
 
   try {
-    const existing = db
+    const [existing] = await db
       .select()
       .from(usersTable)
       .where(eq(usersTable.email, email.toLowerCase().trim()))
-      .get();
+      .limit(1);
 
     if (existing) {
       res.status(409).json({ error: "Un compte avec cet email existe déjà" });
@@ -140,11 +139,11 @@ router.post("/register", async (req, res) => {
       workspaceAccent: null,
       workspaceGlow: null,
       workspaceMotion: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
     };
 
-    db.insert(usersTable).values(user).run();
+    await db.insert(usersTable).values(user);
 
     res.json({
       token: makeToken(user),
@@ -164,11 +163,11 @@ router.post("/login", async (req, res) => {
   }
 
   try {
-    const user = db
+    const [user] = await db
       .select()
       .from(usersTable)
       .where(eq(usersTable.email, email.toLowerCase().trim()))
-      .get();
+      .limit(1);
 
     if (!user) {
       res.status(401).json({ error: "Email ou mot de passe incorrect" });
@@ -199,11 +198,11 @@ router.post("/login", async (req, res) => {
 router.get("/me", authMiddleware, async (req, res) => {
   try {
     const userId = req.userId as string;
-    const user = db
+    const [user] = await db
       .select()
       .from(usersTable)
       .where(eq(usersTable.id, userId))
-      .get();
+      .limit(1);
 
     if (!user) {
       res.status(401).json({ error: "Utilisateur introuvable" });
@@ -314,7 +313,7 @@ router.get("/oauth/:provider/callback", async (req, res) => {
       return;
     }
 
-    const user = findOrCreateOAuthUser(email, provider);
+    const user = await findOrCreateOAuthUser(email, provider);
     const token = makeToken(user);
     const redirect = new URL("/auth", appUrl());
     redirect.searchParams.set("token", token);

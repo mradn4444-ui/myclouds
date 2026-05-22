@@ -7,22 +7,22 @@ import {
   insertFolderSchema,
   type Category,
   type Folder,
+  and,
+  eq,
 } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../middlewares/auth";
 import { nanoid } from "nanoid";
 
 const router = Router();
 
 // CATEGORIES
-router.get("/categories", authMiddleware, (req: AuthRequest, res) => {
+router.get("/categories", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId!;
-    const cats = db
+    const cats = await db
       .select()
       .from(categoriesTable)
-      .where(eq(categoriesTable.userId, userId))
-      .all();
+      .where(eq(categoriesTable.userId, userId));
     res.json(cats);
   } catch (err) {
     console.error(err);
@@ -30,7 +30,7 @@ router.get("/categories", authMiddleware, (req: AuthRequest, res) => {
   }
 });
 
-router.post("/categories", authMiddleware, (req: AuthRequest, res) => {
+router.post("/categories", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId!;
     const result = insertCategorySchema.safeParse(req.body);
@@ -46,10 +46,10 @@ router.post("/categories", authMiddleware, (req: AuthRequest, res) => {
       color: result.data.color ?? null,
       icon: result.data.icon ?? null,
       order: result.data.order ?? 0,
-      createdAt: new Date(),
+      createdAt: Date.now(),
     };
 
-    db.insert(categoriesTable).values(newCat).run();
+    await db.insert(categoriesTable).values(newCat);
     res.status(201).json(newCat);
   } catch (err) {
     console.error(err);
@@ -57,24 +57,23 @@ router.post("/categories", authMiddleware, (req: AuthRequest, res) => {
   }
 });
 
-router.patch("/categories/:id", authMiddleware, (req: AuthRequest, res) => {
+router.patch("/categories/:id", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const id = String(req.params.id);
     const userId = req.userId!;
 
-    const existing = db
+    const [existing] = await db
       .select()
       .from(categoriesTable)
       .where(and(eq(categoriesTable.id, id), eq(categoriesTable.userId, userId)))
-      .get();
+      .limit(1);
 
     if (!existing) return res.status(404).json({ error: "Non trouvé" });
 
     const updated = { ...existing, ...req.body };
-    db.update(categoriesTable)
+    await db.update(categoriesTable)
       .set(updated)
-      .where(and(eq(categoriesTable.id, id), eq(categoriesTable.userId, userId)))
-      .run();
+      .where(and(eq(categoriesTable.id, id), eq(categoriesTable.userId, userId)));
 
     res.json(updated);
   } catch (err) {
@@ -83,14 +82,13 @@ router.patch("/categories/:id", authMiddleware, (req: AuthRequest, res) => {
   }
 });
 
-router.delete("/categories/:id", authMiddleware, (req: AuthRequest, res) => {
+router.delete("/categories/:id", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const id = String(req.params.id);
     const userId = req.userId!;
 
-    db.delete(categoriesTable)
-      .where(and(eq(categoriesTable.id, id), eq(categoriesTable.userId, userId)))
-      .run();
+    await db.delete(categoriesTable)
+      .where(and(eq(categoriesTable.id, id), eq(categoriesTable.userId, userId)));
 
     res.json({ success: true });
   } catch (err) {
@@ -100,14 +98,13 @@ router.delete("/categories/:id", authMiddleware, (req: AuthRequest, res) => {
 });
 
 // FOLDERS
-router.get("/folders", authMiddleware, (req: AuthRequest, res) => {
+router.get("/folders", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId!;
-    const folders = db
+    const folders = await db
       .select()
       .from(foldersTable)
-      .where(eq(foldersTable.userId, userId))
-      .all();
+      .where(eq(foldersTable.userId, userId));
     res.json(folders);
   } catch (err) {
     console.error(err);
@@ -115,7 +112,7 @@ router.get("/folders", authMiddleware, (req: AuthRequest, res) => {
   }
 });
 
-router.post("/folders", authMiddleware, (req: AuthRequest, res) => {
+router.post("/folders", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId!;
     const result = insertFolderSchema.safeParse(req.body);
@@ -131,10 +128,10 @@ router.post("/folders", authMiddleware, (req: AuthRequest, res) => {
       name: result.data.name,
       parentFolderId: result.data.parentFolderId ?? null,
       order: result.data.order ?? 0,
-      createdAt: new Date(),
+      createdAt: Date.now(),
     };
 
-    db.insert(foldersTable).values(newFolder).run();
+    await db.insert(foldersTable).values(newFolder);
     res.status(201).json(newFolder);
   } catch (err) {
     console.error(err);
@@ -142,24 +139,23 @@ router.post("/folders", authMiddleware, (req: AuthRequest, res) => {
   }
 });
 
-router.patch("/folders/:id", authMiddleware, (req: AuthRequest, res) => {
+router.patch("/folders/:id", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const id = String(req.params.id);
     const userId = req.userId!;
 
-    const existing = db
+    const [existing] = await db
       .select()
       .from(foldersTable)
       .where(and(eq(foldersTable.id, id), eq(foldersTable.userId, userId)))
-      .get();
+      .limit(1);
 
     if (!existing) return res.status(404).json({ error: "Non trouvé" });
 
     const updated = { ...existing, ...req.body };
-    db.update(foldersTable)
+    await db.update(foldersTable)
       .set(updated)
-      .where(and(eq(foldersTable.id, id), eq(foldersTable.userId, userId)))
-      .run();
+      .where(and(eq(foldersTable.id, id), eq(foldersTable.userId, userId)));
 
     res.json(updated);
   } catch (err) {
@@ -168,14 +164,13 @@ router.patch("/folders/:id", authMiddleware, (req: AuthRequest, res) => {
   }
 });
 
-router.delete("/folders/:id", authMiddleware, (req: AuthRequest, res) => {
+router.delete("/folders/:id", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const id = String(req.params.id);
     const userId = req.userId!;
 
-    db.delete(foldersTable)
-      .where(and(eq(foldersTable.id, id), eq(foldersTable.userId, userId)))
-      .run();
+    await db.delete(foldersTable)
+      .where(and(eq(foldersTable.id, id), eq(foldersTable.userId, userId)));
 
     res.json({ success: true });
   } catch (err) {

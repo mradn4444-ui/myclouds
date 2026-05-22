@@ -1,9 +1,12 @@
-import { text, integer, sqliteTable } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { bigint, integer, text, pgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { usersTable } from "./users";
 import { itemsTable } from "./items";
 
-export const filesTable = sqliteTable("files", {
+const nowMs = sql`(floor(extract(epoch from now()) * 1000)::bigint)`;
+
+export const filesTable = pgTable("files", {
   id: text("id").primaryKey(),
   userId: text("user_id")
     .notNull()
@@ -15,7 +18,7 @@ export const filesTable = sqliteTable("files", {
   storagePath: text("storage_path").notNull(), // local ou S3 path
   mimeType: text("mime_type").notNull(),
   fileSize: integer("file_size").notNull(),
-  uploadedAt: integer("uploaded_at", { mode: "timestamp_ms" }).defaultNow().notNull(),
+  uploadedAt: bigint("uploaded_at", { mode: "number" }).default(nowMs).notNull(),
   fileHash: text("file_hash"), // pour dedup
 });
 

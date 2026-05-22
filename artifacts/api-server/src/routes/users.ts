@@ -1,19 +1,18 @@
 import { Router } from "express";
-import { db, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, eq, usersTable } from "@workspace/db";
 import { authMiddleware, type AuthRequest } from "../middlewares/auth";
 
 const router = Router();
 
 // GET /api/users/profile - Récupérer le profil de l'utilisateur
-router.get("/profile", authMiddleware, (req: AuthRequest, res) => {
+router.get("/profile", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId!;
-    const user = db
+    const [user] = await db
       .select()
       .from(usersTable)
       .where(eq(usersTable.id, userId))
-      .get();
+      .limit(1);
 
     if (!user) {
       return res.status(404).json({ error: "Utilisateur non trouvé" });
@@ -29,7 +28,7 @@ router.get("/profile", authMiddleware, (req: AuthRequest, res) => {
 });
 
 // PATCH /api/users/profile - Mettre à jour le profil
-router.patch("/profile", authMiddleware, (req: AuthRequest, res) => {
+router.patch("/profile", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId!;
     const {
@@ -44,11 +43,11 @@ router.patch("/profile", authMiddleware, (req: AuthRequest, res) => {
       workspaceMotion,
     } = req.body;
 
-    const existing = db
+    const [existing] = await db
       .select()
       .from(usersTable)
       .where(eq(usersTable.id, userId))
-      .get();
+      .limit(1);
 
     if (!existing) {
       return res.status(404).json({ error: "Utilisateur non trouvé" });
@@ -65,10 +64,10 @@ router.patch("/profile", authMiddleware, (req: AuthRequest, res) => {
       workspaceAccent: workspaceAccent !== undefined ? workspaceAccent : existing.workspaceAccent,
       workspaceGlow: workspaceGlow !== undefined ? workspaceGlow : existing.workspaceGlow,
       workspaceMotion: workspaceMotion !== undefined ? workspaceMotion : existing.workspaceMotion,
-      updatedAt: new Date(),
+      updatedAt: Date.now(),
     };
 
-    db.update(usersTable).set(updated).where(eq(usersTable.id, userId)).run();
+    await db.update(usersTable).set(updated).where(eq(usersTable.id, userId));
 
     const { passwordHash, ...profile } = updated;
     res.json(profile);

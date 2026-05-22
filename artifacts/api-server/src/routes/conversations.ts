@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { nanoid } from "nanoid";
-import { eq, and, desc, isNull } from "drizzle-orm";
-import { db, conversationsTable, conversationMessagesTable } from "@workspace/db";
+import { and, db, desc, eq, isNull, conversationsTable, conversationMessagesTable } from "@workspace/db";
 import { authMiddleware } from "../middlewares/auth.js";
 
 const router = Router();
@@ -26,7 +25,7 @@ router.post("/", async (req, res) => {
       updatedAt: Date.now(),
     };
 
-    await db.insert(conversationsTable).values(conversation).run();
+    await db.insert(conversationsTable).values(conversation);
 
     res.json(conversation);
   } catch (err) {
@@ -135,7 +134,7 @@ router.post("/:id/messages", async (req, res) => {
       createdAt: Date.now(),
     };
 
-    await db.insert(conversationMessagesTable).values(message).run();
+    await db.insert(conversationMessagesTable).values(message);
 
     // Update conversation: increment message count, update timestamp
     await db
@@ -144,8 +143,7 @@ router.post("/:id/messages", async (req, res) => {
         messageCount: (conversation[0].messageCount || 0) + 1,
         updatedAt: Date.now(),
       })
-      .where(and(eq(conversationsTable.id, id), eq(conversationsTable.userId, userId)))
-      .run();
+      .where(and(eq(conversationsTable.id, id), eq(conversationsTable.userId, userId)));
 
     res.json(message);
   } catch (err) {
@@ -177,7 +175,7 @@ router.patch("/:id", async (req, res) => {
     if (topic !== undefined) updates.topic = topic;
     if (summary !== undefined) updates.summary = summary;
 
-    await db.update(conversationsTable).set(updates).where(and(eq(conversationsTable.id, id), eq(conversationsTable.userId, userId))).run();
+    await db.update(conversationsTable).set(updates).where(and(eq(conversationsTable.id, id), eq(conversationsTable.userId, userId)));
 
     const updated = await db
       .select()
@@ -211,8 +209,7 @@ router.post("/:id/archive", async (req, res) => {
     await db
       .update(conversationsTable)
       .set({ archivedAt: Date.now() })
-      .where(and(eq(conversationsTable.id, id), eq(conversationsTable.userId, userId)))
-      .run();
+      .where(and(eq(conversationsTable.id, id), eq(conversationsTable.userId, userId)));
 
     res.json({ success: true });
   } catch (err) {
@@ -240,11 +237,10 @@ router.delete("/:id", async (req, res) => {
     // Delete all messages first (cascade will handle it, but explicit for clarity)
     await db
       .delete(conversationMessagesTable)
-      .where(and(eq(conversationMessagesTable.conversationId, id), eq(conversationMessagesTable.userId, userId)))
-      .run();
+      .where(and(eq(conversationMessagesTable.conversationId, id), eq(conversationMessagesTable.userId, userId)));
 
     // Delete conversation
-    await db.delete(conversationsTable).where(and(eq(conversationsTable.id, id), eq(conversationsTable.userId, userId))).run();
+    await db.delete(conversationsTable).where(and(eq(conversationsTable.id, id), eq(conversationsTable.userId, userId)));
 
     res.json({ success: true });
   } catch (err) {

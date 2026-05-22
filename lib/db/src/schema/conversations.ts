@@ -1,7 +1,10 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { bigint, integer, pgTable, text } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
-export const conversationsTable = sqliteTable("conversations", {
+const nowMs = sql`(floor(extract(epoch from now()) * 1000)::bigint)`;
+
+export const conversationsTable = pgTable("conversations", {
   id: text("id").primaryKey(),
   userId: text("user_id")
     .notNull()
@@ -10,12 +13,12 @@ export const conversationsTable = sqliteTable("conversations", {
   summary: text("summary"),
   topic: text("topic"),
   messageCount: integer("message_count").default(0),
-  createdAt: integer("created_at").notNull(),
-  updatedAt: integer("updated_at").notNull(),
-  archivedAt: integer("archived_at"),
+  createdAt: bigint("created_at", { mode: "number" }).default(nowMs).notNull(),
+  updatedAt: bigint("updated_at", { mode: "number" }).default(nowMs).notNull(),
+  archivedAt: bigint("archived_at", { mode: "number" }),
 });
 
-export const conversationMessagesTable = sqliteTable("conversation_messages", {
+export const conversationMessagesTable = pgTable("conversation_messages", {
   id: text("id").primaryKey(),
   conversationId: text("conversation_id")
     .notNull()
@@ -27,7 +30,7 @@ export const conversationMessagesTable = sqliteTable("conversation_messages", {
   content: text("content").notNull(),
   tokens: integer("tokens").default(0),
   metadata: text("metadata"),
-  createdAt: integer("created_at").notNull(),
+  createdAt: bigint("created_at", { mode: "number" }).default(nowMs).notNull(),
 });
 
 export type Conversation = typeof conversationsTable.$inferSelect;

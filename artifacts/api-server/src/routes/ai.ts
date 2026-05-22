@@ -1,8 +1,7 @@
 import { Router } from "express";
 import Groq from "groq-sdk";
 import { nanoid } from "nanoid";
-import { eq, and } from "drizzle-orm";
-import { db, conversationMessagesTable, conversationsTable } from "@workspace/db";
+import { and, db, eq, conversationMessagesTable, conversationsTable } from "@workspace/db";
 import { authMiddleware, type AuthRequest } from "../middlewares/auth";
 
 const router = Router();
@@ -233,7 +232,7 @@ router.post("/chat", authMiddleware, async (req: AuthRequest, res) => {
       updatedAt: Date.now(),
       archivedAt: null,
     };
-    db.insert(conversationsTable).values(conversation).run();
+    await db.insert(conversationsTable).values(conversation);
   }
 
   // Si conversationId fourni, charger l'historique
@@ -348,24 +347,24 @@ router.post("/chat", authMiddleware, async (req: AuthRequest, res) => {
       try {
         // Sauvegarder le message utilisateur
         const userMsg = messages[messages.length - 1];
-        db.insert(conversationMessagesTable).values({
+        await db.insert(conversationMessagesTable).values({
           id: nanoid(),
           conversationId: activeConversationId,
           userId,
           role: userMsg.role,
           content: userMsg.content,
           createdAt: Date.now(),
-        }).run();
+        });
 
         // Sauvegarder la réponse de l'IA
-        db.insert(conversationMessagesTable).values({
+        await db.insert(conversationMessagesTable).values({
           id: nanoid(),
           conversationId: activeConversationId,
           userId,
           role: "assistant",
           content: reply,
           createdAt: Date.now(),
-        }).run();
+        });
 
         // Mettre à jour la conversation
         await db
@@ -374,8 +373,7 @@ router.post("/chat", authMiddleware, async (req: AuthRequest, res) => {
             messageCount: (conversation.messageCount || 0) + 2,
             updatedAt: Date.now(),
           })
-          .where(and(eq(conversationsTable.id, activeConversationId), eq(conversationsTable.userId, userId)))
-          .run();
+          .where(and(eq(conversationsTable.id, activeConversationId), eq(conversationsTable.userId, userId)));
       } catch (err) {
         console.error("Error saving conversation messages:", err);
       }
@@ -431,7 +429,7 @@ router.post("/image", authMiddleware, async (req: AuthRequest, res) => {
         updatedAt: Date.now(),
         archivedAt: null,
       };
-      db.insert(conversationsTable).values(conversation).run();
+      await db.insert(conversationsTable).values(conversation);
     }
 
     const language = detectUserLanguage(prompt);
@@ -454,16 +452,16 @@ router.post("/image", authMiddleware, async (req: AuthRequest, res) => {
       `${localizedLabel(language, { French: "Demande", English: "Prompt", Spanish: "Solicitud" })}: ${prompt.trim()}`,
     ].join("\n");
 
-    db.insert(conversationMessagesTable).values({
+    await db.insert(conversationMessagesTable).values({
       id: nanoid(),
       conversationId: activeConversationId,
       userId,
       role: "user",
       content: prompt.trim(),
       createdAt: Date.now(),
-    }).run();
+    });
 
-    db.insert(conversationMessagesTable).values({
+    await db.insert(conversationMessagesTable).values({
       id: nanoid(),
       conversationId: activeConversationId,
       userId,
@@ -471,7 +469,7 @@ router.post("/image", authMiddleware, async (req: AuthRequest, res) => {
       content: reply,
       metadata: JSON.stringify({ type: "generated-image", title: spec.title }),
       createdAt: Date.now(),
-    }).run();
+    });
 
     await db
       .update(conversationsTable)
@@ -479,8 +477,7 @@ router.post("/image", authMiddleware, async (req: AuthRequest, res) => {
         messageCount: (conversation?.messageCount || 0) + 2,
         updatedAt: Date.now(),
       })
-      .where(and(eq(conversationsTable.id, activeConversationId), eq(conversationsTable.userId, userId)))
-      .run();
+      .where(and(eq(conversationsTable.id, activeConversationId), eq(conversationsTable.userId, userId)));
 
     res.json({
       title: spec.title,

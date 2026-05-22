@@ -3,8 +3,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { db, filesTable, insertFileSchema, itemsTable, type Item } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { and, db, eq, filesTable, insertFileSchema, itemsTable, type Item } from "@workspace/db";
 import { authMiddleware, type AuthRequest } from "../middlewares/auth";
 import { nanoid } from "nanoid";
 
@@ -34,7 +33,7 @@ const upload = multer({
 const router = Router();
 
 // POST /api/files/upload - Upload un fichier et crée un item
-router.post("/upload", authMiddleware, upload.single("file"), (req: AuthRequest, res) => {
+router.post("/upload", authMiddleware, upload.single("file"), async (req: AuthRequest, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "Fichier manquant" });
@@ -66,11 +65,11 @@ router.post("/upload", authMiddleware, upload.single("file"), (req: AuthRequest,
       url: null,
       aiSummary: null,
       tags: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
     };
 
-    db.insert(itemsTable).values(newItem).run();
+    await db.insert(itemsTable).values(newItem);
 
     // Enregistrer les métadonnées du fichier
     const fileRecord = {
@@ -84,7 +83,7 @@ router.post("/upload", authMiddleware, upload.single("file"), (req: AuthRequest,
       fileHash: null,
     };
 
-    db.insert(filesTable).values(fileRecord).run();
+    await db.insert(filesTable).values(fileRecord);
 
     res.status(201).json({
       item: newItem,
@@ -98,16 +97,16 @@ router.post("/upload", authMiddleware, upload.single("file"), (req: AuthRequest,
 });
 
 // GET /api/files/download/:id - Télécharger un fichier
-router.get("/download/:id", authMiddleware, (req: AuthRequest, res) => {
+router.get("/download/:id", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const id = String(req.params.id);
     const userId = req.userId!;
 
-    const file = db
+    const [file] = await db
       .select()
       .from(filesTable)
       .where(and(eq(filesTable.id, id), eq(filesTable.userId, userId)))
-      .get();
+      .limit(1);
 
     if (!file) {
       return res.status(404).json({ error: "Fichier non trouvé" });
@@ -130,16 +129,16 @@ router.get("/download/:id", authMiddleware, (req: AuthRequest, res) => {
 });
 
 // DELETE /api/files/:id - Supprimer un fichier
-router.delete("/:id", authMiddleware, (req: AuthRequest, res) => {
+router.delete("/:id", authMiddleware, async (req: AuthRequest, res) => {
   try {
     const id = String(req.params.id);
     const userId = req.userId!;
 
-    const file = db
+    const [file] = await db
       .select()
       .from(filesTable)
       .where(and(eq(filesTable.id, id), eq(filesTable.userId, userId)))
-      .get();
+      .limit(1);
 
     if (!file) {
       return res.status(404).json({ error: "Fichier non trouvé" });
@@ -151,8 +150,8 @@ router.delete("/:id", authMiddleware, (req: AuthRequest, res) => {
     }
 
     // Supprimer les enregistrements DB
-    db.delete(filesTable).where(eq(filesTable.id, id)).run();
-    db.delete(itemsTable).where(eq(itemsTable.id, file.itemId)).run();
+    await db.delete(filesTable).where(eq(filesTable.id, id));
+    await db.delete(itemsTable).where(eq(itemsTable.id, file.itemId));
 
     res.json({ success: true });
   } catch (err) {

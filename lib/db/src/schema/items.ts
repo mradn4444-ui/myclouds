@@ -1,10 +1,13 @@
-import { text, integer, real, sqliteTable } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { bigint, integer, real, text, pgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { usersTable } from "./users";
 import { categoriesTable } from "./categories";
 import { foldersTable } from "./folders";
 
-export const itemsTable = sqliteTable("items", {
+const nowMs = sql`(floor(extract(epoch from now()) * 1000)::bigint)`;
+
+export const itemsTable = pgTable("items", {
   id: text("id").primaryKey(),
   userId: text("user_id")
     .notNull()
@@ -28,8 +31,8 @@ export const itemsTable = sqliteTable("items", {
   height: real("height").default(300),
   aiSummary: text("ai_summary"),
   tags: text("tags"), // JSON stringified array
-  createdAt: integer("created_at", { mode: "timestamp_ms" }).defaultNow().notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).defaultNow().notNull(),
+  createdAt: bigint("created_at", { mode: "number" }).default(nowMs).notNull(),
+  updatedAt: bigint("updated_at", { mode: "number" }).default(nowMs).notNull(),
 });
 
 export const insertItemSchema = z.object({

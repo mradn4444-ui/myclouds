@@ -1,7 +1,10 @@
-import { integer, text, sqliteTable } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { bigint, text, pgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
-export const usersTable = sqliteTable("users", {
+const nowMs = sql`(floor(extract(epoch from now()) * 1000)::bigint)`;
+
+export const usersTable = pgTable("users", {
   id: text("id").primaryKey(),
   email: text("email").unique().notNull(),
   passwordHash: text("password_hash").notNull(),
@@ -14,8 +17,8 @@ export const usersTable = sqliteTable("users", {
   workspaceAccent: text("workspace_accent"),
   workspaceGlow: text("workspace_glow"),
   workspaceMotion: text("workspace_motion"),
-  createdAt: integer("created_at", { mode: "timestamp_ms" }).defaultNow().notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).defaultNow().notNull(),
+  createdAt: bigint("created_at", { mode: "number" }).default(nowMs).notNull(),
+  updatedAt: bigint("updated_at", { mode: "number" }).default(nowMs).notNull(),
 });
 
 export const insertUserSchema = z.object({

@@ -1,8 +1,11 @@
-import { text, integer, sqliteTable } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { bigint, integer, text, pgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { usersTable } from "./users";
 
-export const categoriesTable = sqliteTable("categories", {
+const nowMs = sql`(floor(extract(epoch from now()) * 1000)::bigint)`;
+
+export const categoriesTable = pgTable("categories", {
   id: text("id").primaryKey(),
   userId: text("user_id")
     .notNull()
@@ -11,7 +14,7 @@ export const categoriesTable = sqliteTable("categories", {
   color: text("color"),
   icon: text("icon"),
   order: integer("order").default(0),
-  createdAt: integer("created_at", { mode: "timestamp_ms" }).defaultNow().notNull(),
+  createdAt: bigint("created_at", { mode: "number" }).default(nowMs).notNull(),
 });
 
 export const insertCategorySchema = z.object({
