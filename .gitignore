@@ -10,6 +10,13 @@ out-tsc
 
 # dependencies
 node_modules
+.pnpm-store/
+
+# environment variables — never commit secrets
+.env
+.env.local
+.env.*
+!.env.example
 
 # IDEs and editors
 /.idea
@@ -41,10 +48,11 @@ testem.log
 .DS_Store
 Thumbs.db
 
+# Cursor / project instructions
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 
-# doni
+# local caches
 .cache/
 .local/
 
@@ -52,3 +60,10 @@ Thumbs.db
 artifacts/data/users.json
 artifacts/api-server/data/users.json
 artifacts/api-server/data/
+data/
+data/uploads/
+
+# build/cache folders
+.next/
+build/
+out/
