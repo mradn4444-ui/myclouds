@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { Component as ReactComponent, useEffect, type ErrorInfo, type ReactNode } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -13,6 +13,40 @@ import NotFound from "@/pages/not-found";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 
 const queryClient = new QueryClient();
+
+class AppErrorBoundary extends ReactComponent<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("MyClouds render error", error, info);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+
+    return (
+      <main className="auth-page">
+        <div className="auth-dot-grid" />
+        <div className="auth-container">
+          <div className="auth-brand">
+            <span className="auth-logo">MYCLOUD</span>
+            <p className="auth-tagline">Chargement interrompu</p>
+          </div>
+          <div className="auth-alert auth-alert-error">
+            MyClouds n'a pas pu afficher cette page. {this.state.error.message}
+          </div>
+          <div className="auth-card">
+            <a className="auth-submit-btn" href="/">Retour a l'accueil</a>
+          </div>
+        </div>
+      </main>
+    );
+  }
+}
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, loading } = useAuth()
@@ -73,9 +107,11 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <AuthProvider>
-            <AuthenticatedApp />
-          </AuthProvider>
+          <AppErrorBoundary>
+            <AuthProvider>
+              <AuthenticatedApp />
+            </AuthProvider>
+          </AppErrorBoundary>
         </WouterRouter>
         <Toaster />
       </TooltipProvider>

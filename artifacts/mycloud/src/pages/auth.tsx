@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation, useSearch } from 'wouter'
 import { useAuth } from '@/hooks/useAuth'
-import { getApiUrl } from '@/lib/api'
+import { getApiConfigError, getOptionalApiUrl } from '@/lib/api'
 
 export default function AuthPage() {
   const [error, setError] = useState<string | null>(null)
@@ -11,6 +11,9 @@ export default function AuthPage() {
   const { login, acceptToken, user } = useAuth()
   const [, navigate] = useLocation()
   const search = useSearch()
+  const apiConfigError = getApiConfigError()
+  const googleOAuthUrl = getOptionalApiUrl('/auth/oauth/google')
+  const githubOAuthUrl = getOptionalApiUrl('/auth/oauth/github')
 
   useEffect(() => {
     const params = new URLSearchParams(search)
@@ -52,7 +55,7 @@ export default function AuthPage() {
           <p className="auth-tagline">Votre espace personnel</p>
         </div>
 
-        {error && <div className="auth-alert auth-alert-error">{error}</div>}
+        {(error || apiConfigError) && <div className="auth-alert auth-alert-error">{error || apiConfigError}</div>}
         {message && <div className="auth-alert auth-alert-success">{message}</div>}
 
         <div className="auth-card">
@@ -87,14 +90,22 @@ export default function AuthPage() {
               <div className={`auth-underline${focusedField === 'password' ? ' active' : ''}`} />
             </div>
 
-            <button type="submit" disabled={loading} className="auth-submit-btn">
+            <button type="submit" disabled={loading || Boolean(apiConfigError)} className="auth-submit-btn">
               {loading ? <span className="auth-spinner" /> : 'Se connecter'}
             </button>
           </form>
 
           <div className="auth-oauth-row">
-            <a className="auth-oauth-btn" href={getApiUrl('/auth/oauth/google')}>Google</a>
-            <a className="auth-oauth-btn" href={getApiUrl('/auth/oauth/github')}>GitHub</a>
+            {googleOAuthUrl ? (
+              <a className="auth-oauth-btn" href={googleOAuthUrl}>Google</a>
+            ) : (
+              <span className="auth-oauth-btn auth-oauth-btn-disabled">Google</span>
+            )}
+            {githubOAuthUrl ? (
+              <a className="auth-oauth-btn" href={githubOAuthUrl}>GitHub</a>
+            ) : (
+              <span className="auth-oauth-btn auth-oauth-btn-disabled">GitHub</span>
+            )}
           </div>
 
           <div className="auth-footer">

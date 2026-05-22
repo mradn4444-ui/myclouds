@@ -2032,6 +2032,15 @@ a:focus-visible {
   background: rgba(139, 231, 255, 0.07);
 }
 
+.auth-oauth-btn-disabled,
+.auth-oauth-btn-disabled:hover {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+}
+
 .app-home-shell {
   min-height: 100dvh;
   padding: 28px clamp(18px, 4vw, 56px);

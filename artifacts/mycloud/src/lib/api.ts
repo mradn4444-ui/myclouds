@@ -24,17 +24,25 @@ export function getApiBase() {
   return import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") || localApiBase();
 }
 
+export function getApiConfigError() {
+  if (getApiBase()) return null;
+  if (!import.meta.env.PROD) return null;
+
+  return "Configuration API manquante: ajoute VITE_API_BASE_URL dans Netlify avec l'URL de ton API deployee.";
+}
+
 export function getApiUrl(endpoint: string) {
   const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   const base = getApiBase();
 
-  if (!base && import.meta.env.PROD) {
-    throw new Error(
-      "Configuration API manquante: ajoute VITE_API_BASE_URL dans Netlify avec l'URL de ton API deployee."
-    );
-  }
+  const configError = getApiConfigError();
+  if (configError) throw new Error(configError);
 
   return `${base}/api${path}`;
+}
+
+export function getOptionalApiUrl(endpoint: string) {
+  return getApiConfigError() ? null : getApiUrl(endpoint);
 }
 
 export function getAuthedAssetUrl(pathOrUrl?: string | null) {
